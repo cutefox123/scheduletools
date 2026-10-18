@@ -1,8 +1,8 @@
 // 查班小助手 PWA —— 主逻辑
 // 解析全部在本地完成（js/xlsx.js、js/xls.js、js/parser.js、js/rooms.js），数据只存 localStorage。
 
-import { fetchWeather } from './weather.js?v=2026-10-19T00%3A07%3A28';
-import { buildTips } from './tips.js?v=2026-10-19T00%3A07%3A28';
+import { fetchWeather } from './weather.js?v=2026-10-19T00%3A08%3A26';
+import { buildTips } from './tips.js?v=2026-10-19T00%3A08%3A26';
 
 const K = {
   doctorRows: 'sa.doctorRows',
@@ -104,10 +104,10 @@ async function loadModules() {
       return false;
     }
   };
-  await load('xlsx', './xlsx.js?v=2026-10-19T00%3A07%3A28');
-  await load('xls', './xls.js?v=2026-10-19T00%3A07%3A28');
-  await load('parser', './parser.js?v=2026-10-19T00%3A07%3A28');
-  await load('rooms', './rooms.js?v=2026-10-19T00%3A07%3A28');
+  await load('xlsx', './xlsx.js?v=2026-10-19T00%3A08%3A26');
+  await load('xls', './xls.js?v=2026-10-19T00%3A08%3A26');
+  await load('parser', './parser.js?v=2026-10-19T00%3A08%3A26');
+  await load('rooms', './rooms.js?v=2026-10-19T00%3A08%3A26');
   if (!mod.parser) {
     toast('解析模块未就绪，页面仍可打开');
   }
@@ -523,6 +523,24 @@ async function init() {
     $('dlgSettings').showModal();
   };
   $('btnCloseSettings').onclick = () => $('dlgSettings').close();
+  $('btnHardReload').onclick = async () => {
+    toast('正在清理缓存…');
+    try {
+      if (window.caches) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map((k) => caches.delete(k)));
+      }
+      if (navigator.serviceWorker) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map((r) => r.unregister()));
+      }
+    } catch (e) {
+      // 忽略：能清多少清多少
+    }
+    $('dlgSettings').close();
+    location.replace(location.pathname + '?fresh=' + Date.now());
+  };
+
   $('btnGuide').onclick = () => {
     const lines = [
       '1. 在微信里点开排班 xlsx → 右上角 ··· → 用其他应用打开 → 存储到「文件」',
@@ -649,5 +667,5 @@ function loadCachedWeek() {
   }
 }
 
-self.__APP_VERSION__ = '2026-10-19T00:07:28';
+self.__APP_VERSION__ = '2026-10-19T00:08:26';
 document.addEventListener('DOMContentLoaded', init);
