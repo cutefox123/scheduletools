@@ -1,8 +1,8 @@
 // 查班小助手 PWA —— 主逻辑
 // 解析全部在本地完成（js/xlsx.js、js/xls.js、js/parser.js、js/rooms.js），数据只存 localStorage。
 
-import { fetchWeather } from './weather.js?v=2026-10-19T00%3A59%3A11';
-import { buildTips } from './tips.js?v=2026-10-19T00%3A59%3A11';
+import { fetchWeather } from './weather.js?v=2026-10-19T01%3A04%3A05';
+import { buildTips } from './tips.js?v=2026-10-19T01%3A04%3A05';
 
 const K = {
   doctorRows: 'sa.doctorRows',
@@ -104,10 +104,10 @@ async function loadModules() {
       return false;
     }
   };
-  await load('xlsx', './xlsx.js?v=2026-10-19T00%3A59%3A11');
-  await load('xls', './xls.js?v=2026-10-19T00%3A59%3A11');
-  await load('parser', './parser.js?v=2026-10-19T00%3A59%3A11');
-  await load('rooms', './rooms.js?v=2026-10-19T00%3A59%3A11');
+  await load('xlsx', './xlsx.js?v=2026-10-19T01%3A04%3A05');
+  await load('xls', './xls.js?v=2026-10-19T01%3A04%3A05');
+  await load('parser', './parser.js?v=2026-10-19T01%3A04%3A05');
+  await load('rooms', './rooms.js?v=2026-10-19T01%3A04%3A05');
   if (!mod.parser) {
     toast('解析模块未就绪，页面仍可打开');
   }
@@ -262,20 +262,6 @@ function copyDay(d) {
     }
   } catch (e) { pair = ''; }
   if (pair) lines.push(pair);
-
-  const lead = store.get(K.lead, '30');
-  if (d.preTime) lines.push('提醒：' + d.preTime + '（上班前 ' + lead + ' 分钟）');
-
-  const w = state.weather[d.ymd];
-  const wObj = (w && typeof w === 'object') ? w : null;
-  const weatherText = wObj ? wObj.text : (typeof w === 'string' ? w : '');
-  if (weatherText) lines.push('天气：' + weatherText);
-
-  const tips = buildTips(d, wObj);
-  if (tips) {
-    lines.push('贴心提醒：');
-    lines.push(tips);
-  }
 
   const text = lines.join('\n');
   const done = () => toast('已复制：' + head);
@@ -824,5 +810,5 @@ function loadCachedWeek() {
   }
 }
 
-self.__APP_VERSION__ = '2026-10-19T00:59:11';
+self.__APP_VERSION__ = '2026-10-19T01:04:05';
 document.addEventListener('DOMContentLoaded', init);
