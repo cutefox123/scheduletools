@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<title>查班小助手</title>
+<meta name="theme-color" content="#4B6BF5">
+<meta name="description" content="导入排班表，看本周班次、搭档和天气，导出到系统日历提醒">
+<link rel="manifest" href="manifest.webmanifest">
+<!-- iOS 添加到主屏幕 -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="查班">
+<meta name="format-detection" content="telephone=no">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-192.png" sizes="192x192">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="app">
+  <!-- 顶部渐变卡 -->
+  <header class="hero">
+    <div class="hero-top">
+      <h1>查班小助手</h1>
+      <button id="btnSettings" class="icon-btn" aria-label="设置">⚙</button>
+    </div>
+    <p class="hero-sub">导入排班表，自动读出一周班次 · 不联网也能看</p>
+
+    <div class="search-row">
+      <input id="nameInput" type="text" placeholder="医生姓名" autocomplete="off"
+             autocapitalize="off" autocorrect="off" spellcheck="false">
+      <button id="btnQuery" class="btn-white">查询</button>
+    </div>
+
+    <div class="seg" id="seg">
+      <button data-kind="doctor" class="on">医生</button>
+      <button data-kind="reporter">报告员</button>
+    </div>
+
+    <div class="hero-actions">
+      <button id="btnImport" class="btn-ghost solid">导入排班表</button>
+      <button id="btnCalendar" class="btn-ghost">导出到日历</button>
+    </div>
+
+    <div class="hero-actions">
+      <button id="btnRooms" class="btn-ghost">诊室查询</button>
+    </div>
+
+    <p id="fileStatus" class="hero-file">医生表：尚未导入</p>
+    <p id="fileStatusRep" class="hero-file">报告员表：尚未导入</p>
+  </header>
+
+  <!-- 提醒设置 -->
+  <section class="card">
+    <div class="card-head">
+      <span>提醒设置</span>
+      <button id="btnWeather" class="link">刷新天气 ⟳</button>
+    </div>
+    <div class="row">
+      <span>上班前提早</span>
+      <input id="leadInput" type="number" inputmode="numeric" min="0" max="240" value="30">
+      <span>分钟</span>
+      <button id="btnSaveLead" class="btn-primary sm">保存</button>
+    </div>
+    <p class="hint" id="calHint">iPhone 上这一项会写进导出的日历事件，由系统日历到点提醒。</p>
+  </section>
+
+  <!-- 列表 -->
+  <main id="weekList" class="week"></main>
+
+  <!-- 空状态 -->
+  <section id="empty" class="card empty">
+    <h2>还没有排班表</h2>
+    <p>1. 在微信里点开排班 xlsx 文件；<br>
+       2. 右上角「···」→「用其他应用打开」→「存储到“文件”」；<br>
+       3. 回到这里点「导入排班表」，从「文件」里选它。</p>
+    <button id="btnImportEmpty" class="btn-primary">导入排班表</button>
+  </section>
+
+  <footer class="foot">
+    <p id="versionLine">数据只存在这台设备上，不上传任何服务器。</p>
+  </footer>
+</div>
+
+<!-- 导入时问是哪种表 -->
+<dialog id="dlgKind">
+  <h3>这个文件是？</h3>
+  <p class="dlg-sub">选对了才能和另一张表正确配对。</p>
+  <div class="dlg-actions">
+    <button id="pickDoctor" class="btn-primary">医生排班表</button>
+    <button id="pickReporter" class="btn-ghost solid">报告员表</button>
+  </div>
+  <p class="dlg-note" id="pickedFileName"></p>
+</dialog>
+
+<!-- 查人 -->
+<dialog id="dlgPerson">
+  <h3 id="personTitle">查谁的班</h3>
+  <input id="personSearch" type="search" placeholder="搜索姓名" autocomplete="off">
+  <div id="personList" class="person-list"></div>
+  <div class="dlg-actions">
+    <button id="btnClosePerson" class="btn-ghost solid">关闭</button>
+  </div>
+</dialog>
+
+<!-- 设置 -->
+<dialog id="dlgSettings">
+  <h3>设置</h3>
+  <div class="set-row"><span>提醒分钟</span><b id="setLead">30</b></div>
+  <div class="set-row"><span>医生表</span><b id="setDoctor">—</b></div>
+  <div class="set-row"><span>报告员表</span><b id="setReporter">—</b></div>
+  <div class="set-row"><span>版本</span><b id="setVersion">—</b></div>
+  <div class="dlg-actions">
+    <button id="btnClear" class="btn-ghost solid">清空本机数据</button>
+    <button id="btnCloseSettings" class="btn-primary">关闭</button>
+  </div>
+</dialog>
+
+<!-- 诊室查询 -->
+<dialog id="dlgRooms">
+  <h3>诊室查询</h3>
+  <input id="roomSearch" type="search" placeholder="输入诊室，如 东6 / 二期5 / 床旁" autocomplete="off">
+  <div id="roomList" class="person-list"></div>
+  <div class="dlg-actions">
+    <button id="btnCloseRooms" class="btn-ghost solid">关闭</button>
+  </div>
+</dialog>
+
+<input id="filePicker" type="file" accept=".xlsx,.xls,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
