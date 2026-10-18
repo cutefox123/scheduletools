@@ -1,8 +1,8 @@
 // 查班小助手 PWA —— 主逻辑
 // 解析全部在本地完成（js/xlsx.js、js/xls.js、js/parser.js、js/rooms.js），数据只存 localStorage。
 
-import { fetchWeather } from './weather.js?v=2026-10-19T00%3A33%3A18';
-import { buildTips } from './tips.js?v=2026-10-19T00%3A33%3A18';
+import { fetchWeather } from './weather.js?v=2026-10-19T00%3A59%3A11';
+import { buildTips } from './tips.js?v=2026-10-19T00%3A59%3A11';
 
 const K = {
   doctorRows: 'sa.doctorRows',
@@ -104,10 +104,10 @@ async function loadModules() {
       return false;
     }
   };
-  await load('xlsx', './xlsx.js?v=2026-10-19T00%3A33%3A18');
-  await load('xls', './xls.js?v=2026-10-19T00%3A33%3A18');
-  await load('parser', './parser.js?v=2026-10-19T00%3A33%3A18');
-  await load('rooms', './rooms.js?v=2026-10-19T00%3A33%3A18');
+  await load('xlsx', './xlsx.js?v=2026-10-19T00%3A59%3A11');
+  await load('xls', './xls.js?v=2026-10-19T00%3A59%3A11');
+  await load('parser', './parser.js?v=2026-10-19T00%3A59%3A11');
+  await load('rooms', './rooms.js?v=2026-10-19T00%3A59%3A11');
   if (!mod.parser) {
     toast('解析模块未就绪，页面仍可打开');
   }
@@ -237,7 +237,7 @@ function renderList(days) {
       <p class="day-raw">${escapeHtml(d.raw || '（单元格为空）')}</p>
       ${d.workInfo ? `<p class="day-line">${escapeHtml(d.workInfo)}</p>` : ''}
       ${d.startTime ? `<p class="day-line">上班 ${d.startTime}${d.preTime ? ` · 提醒 ${d.preTime}` : ''}${isToday ? '<span class="today-flag">今天</span>' : ''}</p>` : ''}
-      ${pair ? `<p class="day-line">搭档：${escapeHtml(pair)}</p>` : ''}
+      ${pair ? `<p class="day-line">${escapeHtml(pair)}</p>` : ''}
       <p class="day-weather">☁️ ${escapeHtml(weatherText || (past ? '已过' : (state.weatherAt ? '暂无预报' : '天气加载中…')))}</p>
       ${tips ? `<div class="day-tips">${escapeHtml(tips)}</div>` : ''}
     `;
@@ -252,7 +252,31 @@ function copyDay(d) {
     d.startTime || ''].filter(Boolean).join(' ');
   const lines = [head];
   if (d.raw) lines.push('表内写法：' + d.raw);
-  if (d.workInfo) lines.push(d.workInfo);
+  if (d.workInfo) lines.push('时段：' + d.workInfo);
+
+  // 搭档（pairLabel 已带「搭档：」前缀）
+  let pair = '';
+  try {
+    if (mod.parser && mod.parser.pairLabel) {
+      pair = mod.parser.pairLabel(getReporterResult(), d.raw, d.ymd) || '';
+    }
+  } catch (e) { pair = ''; }
+  if (pair) lines.push(pair);
+
+  const lead = store.get(K.lead, '30');
+  if (d.preTime) lines.push('提醒：' + d.preTime + '（上班前 ' + lead + ' 分钟）');
+
+  const w = state.weather[d.ymd];
+  const wObj = (w && typeof w === 'object') ? w : null;
+  const weatherText = wObj ? wObj.text : (typeof w === 'string' ? w : '');
+  if (weatherText) lines.push('天气：' + weatherText);
+
+  const tips = buildTips(d, wObj);
+  if (tips) {
+    lines.push('贴心提醒：');
+    lines.push(tips);
+  }
+
   const text = lines.join('\n');
   const done = () => toast('已复制：' + head);
   if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -800,5 +824,5 @@ function loadCachedWeek() {
   }
 }
 
-self.__APP_VERSION__ = '2026-10-19T00:33:18';
+self.__APP_VERSION__ = '2026-10-19T00:59:11';
 document.addEventListener('DOMContentLoaded', init);
