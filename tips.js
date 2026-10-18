@@ -1,7 +1,7 @@
 // 贴心提醒：从 Android 版 TipsEngine.java 逐条移植
 // 纯规则、离线可用。输入 = 某天的班次（parser.js 产出）+ 结构化天气（weather.js 产出）。
 
-import { dayWorkTimes, morningHasShift, nightHasDaytimeHalf } from './parser.js?v=2026-10-19T00%3A28%3A04';
+import { dayWorkTimes, morningHasShift, nightHasDaytimeHalf } from './parser.js?v=2026-10-19T00%3A33%3A18';
 
 function typeOfShift(d) {
   return d.type || 'REST';

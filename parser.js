@@ -24,7 +24,7 @@ const MID_START_MIN = 12 * 60;
 const DATE_MD = /^(\d{1,2})[.．、\-\/](\d{1,2})$/;
 const YEAR_IN_TITLE = /(20\d{2})\s*年/;
 const WEEK_CELL = /^.*(星期[一二三四五六日天]).*$/;
-const TITLE_RE = /^.*(医师|主任|护士|医生|技师|药师|护长|组长|专家|教授|研究生|博士生|硕士生|本科生|规培生|住培生|进修生|实习生|护师|住院医|规培|进修|实习).*$/;
+const TITLE_RE = /^.*(医师|主任|护士|医生|技师|药师|护长|组长|专家|教授).*$/;
 const DIGITS = /\d/;
 /** 纯标点 / 空白：Java ^[/\\|\-—~．.、，,。\s]+$ */
 const PUNCT_ONLY = /^[/\\|\-—~．.、，,。\s]+$/;
@@ -296,6 +296,7 @@ export function isChinese(s) {
 export function doctorNameCol(row, firstDateCol) {
   if (!row) return -1;
   const limit = Math.min(firstDateCol, row.length);
+  // 主路径：姓名 + 职称（最可靠）
   for (let i = 0; i < limit - 1; i++) {
     if (row[i] == null) continue;
     const name = jtrim(row[i]);
@@ -303,7 +304,35 @@ export function doctorNameCol(row, firstDateCol) {
       return i;
     }
   }
+  // 兜底：不看职称名单，看结构（2~5 字中文名 + 紧跟短标签 + 这行至少 3 天有内容）
+  if (filledDayCells(row, firstDateCol) >= 3) {
+    for (let i = 0; i < limit - 1; i++) {
+      if (row[i] == null) continue;
+      const name = jtrim(row[i]);
+      if (name.length < 2 || name.length > 5 || !isChinese(name)) continue;
+      const tag = row[i + 1] == null ? '' : jtrim(row[i + 1]);
+      if (tag === '' || tag.length > 8 || /\d/.test(tag)) continue;
+      if (ROOM_CELL_RE.test(tag)) continue;   // 后面紧跟的其实是排班内容
+      return i;
+    }
+  }
   return -1;
+}
+
+/** 看起来像排班内容的标记，用来排除“这列不是职称列”。 */
+const ROOM_CELL_RE = /.*(诊|床旁|夜|休|中|假|听|培训|手术|门诊|病房|急诊|介入).*/;
+
+/** 这一行在日期列里填了几天内容（去掉纯符号）。 */
+function filledDayCells(row, firstDateCol) {
+  let n = 0;
+  for (let i = firstDateCol; i < row.length; i++) {
+    const c = row[i];
+    if (c == null) continue;
+    const t = stripWs(c);
+    if (t === '' || /^[/\\|\-—~．.、，,。:：]+$/.test(t)) continue;
+    n++;
+  }
+  return n;
 }
 
 /** 收集医生表里所有人员姓名（按表格顺序），给「选人」用。 */
