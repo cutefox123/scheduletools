@@ -21,26 +21,32 @@ iOS 上的网页应用（PWA）有几个硬限制，必须绕开：
 
 ---
 
-## 二、部署到 Gitee Pages
+## 二、部署到 GitHub Pages（主用）
 
-前提：Gitee 仓库**公开**、账号已实名认证、仓库里开了 Pages。
+前提：GitHub 仓库**公开**。
 
-1. 新建仓库（例如 `chaban`），把本目录内容推到仓库根目录（或 `docs/` 子目录）：
+1. 新建仓库（例如 `schedule-assistant`），把本目录**全部文件**（平的，不要包一层文件夹）推到根目录：
    ```bash
    git init
    git add .
-   git commit -m "chaban pwa"
-   git remote add origin https://gitee.com/<你的用户名>/chaban.git
-   git push -u origin master
+   git commit -m "pwa: 查班小助手"
+   git remote add origin https://github.com/<你的用户名>/schedule-assistant.git
+   git push -u origin main
    ```
-2. 仓库页 → **服务 → Gitee Pages** → 部署分支 `master`、部署目录（根目录就填 `/`）→ 勾选强制 HTTPS → **启动服务**。
-3. 访问地址形如：`https://<你的用户名>.gitee.io/chaban/`
-4. 以后每次改代码推送后，Gitee Pages 需要**手动点一次「更新」**才会重新部署（免费版没有自动部署）。
+2. 仓库页 → **Settings → Pages** → Source 选 **Deploy from a branch** → 分支 `main`、目录 `/ (root)` → **Save**。
+3. 等 1 分钟左右，访问：`https://<你的用户名>.github.io/schedule-assistant/`
+4. 以后改完 push 上去，GitHub Pages 会自动重新部署（通常 30~60 秒）。
 
-> 小提示：
-> - `manifest.webmanifest` 里的 `start_url` 是 `./`，放在子目录也能正常工作。
-> - 站点如果开在子目录，`sw.js` 的缓存路径都是相对路径，不受影响。
-> - Gitee Pages 对静态文件有缓存，改完看不到更新时用「无痕窗口」或加 `?v=2` 试。
+> 要点：
+> - 包里带了一个 **`.nojekyll`** 空文件，作用是关掉 Jekyll 处理，避免文件被跳过、部署变慢；**别删**。
+> - 一定不要把文件套在一个文件夹里再传（否则根路径 404）。
+> - `manifest.webmanifest` 的 `start_url` 是 `./`，放子目录也能用。
+> - 改完没生效：`Ctrl+F5` / 无痕窗口，或确认 Actions/Pages 里这次部署是绿色对勾。
+
+### 备用：Gitee Pages
+
+同一份文件也能放 Gitee Pages：仓库公开 → **服务 → Gitee Pages** → 分支 `master`、目录 `/` → 勾强制 HTTPS → 启动。
+地址形如 `https://<用户名>.gitee.io/<仓库名>/`；免费版每次推送后要**手动点「更新」**。
 
 ---
 

@@ -779,7 +779,22 @@ export function canonicalRoom(token) {
   if (t.length > 1 && t.charAt(t.length - 1) === '诊' && /\d/.test(t.charAt(t.length - 2))) {
     t = t.substring(0, t.length - 1);
   }
+  // 东床旁（听）和东床旁是同一个位置：主键合并，人名后面加（听）区分
+  t = t.replace(/[（(](听|听诊)[）)]$/, '');
   return t;
+}
+
+/** 该单元格是不是听班（如 东床旁（听））。 */
+export function isListen(token) {
+  if (token == null) return false;
+  return /[（(]听/.test(stripWs(token));
+}
+
+/** 听班的人名后面加（听）；其他人原样返回。 */
+export function markListen(name, token) {
+  if (name == null || name === '' || !isListen(token)) return name;
+  if (name.endsWith('（听）') || name.endsWith('(听)')) return name;
+  return name + '（听）';
 }
 
 /** 合并关键字的诊室主键：别名源归并到别名目标（诊室目录按此归组）。 */
@@ -916,8 +931,10 @@ export function reportersFor(data, ymd, halfIdx, doctorToken) {
       if (di >= e.cells.length) continue;
       const am = halfOf(e.cells[di], 0);
       const pm = halfOf(e.cells[di], 1);
-      if ((mid === midKey(am) || mid === midKey(pm)) && !out.includes(e.name)) {
-        out.push(e.name);
+      const place = mid === midKey(am) ? am : pm;
+      const tagged = markListen(e.name, place);
+      if ((mid === midKey(am) || mid === midKey(pm)) && !out.includes(tagged)) {
+        out.push(tagged);
       }
     }
     return out;
@@ -931,8 +948,9 @@ export function reportersFor(data, ymd, halfIdx, doctorToken) {
     // 值/东值/西值（分诊台主管）、科研、请假等非位置行不参与位置配对
     if (half === '' || half === '休' || !isRoomToken(half)) continue;
     const hk = canonicalRoom(half);
-    if (hk !== '' && (keys.includes(hk) || sameRoom(half, doctorToken)) && !out.includes(e.name)) {
-      out.push(e.name);
+    const tagged = markListen(e.name, half);
+    if (hk !== '' && (keys.includes(hk) || sameRoom(half, doctorToken)) && !out.includes(tagged)) {
+      out.push(tagged);
     }
   }
   return out;
