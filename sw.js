@@ -1,5 +1,7 @@
-// 离线缓存：壳资源缓存优先，接口请求直接走网络
-const VERSION = 'v1';
+// 查班小助手 · Service Worker
+// 策略：HTML/导航 走网络优先（保证每次打开都是最新的），静态资源走缓存优先（离线可看）。
+// 缓存版本必须随发布递增，否则用户会一直吃旧缓存。
+const VERSION = 'v3-2026-10-19';
 const SHELL = [
   './',
   './index.html',
@@ -18,9 +20,9 @@ const SHELL = [
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(VERSION).then((cache) =>
-      Promise.all(SHELL.map((url) => cache.add(url).catch(() => null)))
-    ).then(() => self.skipWaiting())
+    caches.open(VERSION)
+      .then((cache) => Promise.all(SHELL.map((url) => cache.add(url).catch(() => null))))
+      .then(() => self.skipWaiting())
   );
 });
 
@@ -29,25 +31,58 @@ self.addEventListener('activate', (event) => {
     caches.keys()
       .then((keys) => Promise.all(keys.filter((k) => k !== VERSION).map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
+      .then(() => self.clients.matchAll({ type: 'window' }))
+      .then((clients) => {
+        // 新版本接管后把还开着的旧页面刷一次，避免停在旧缓存
+        clients.forEach((client) => {
+          if ('navigate' in client) {
+            client.navigate(client.url).catch(() => {});
+          }
+        });
+      })
   );
 });
 
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
-  const url = new URL(req.url);
-  if (url.origin !== self.location.origin) return;   // 天气接口不缓存
 
+  const url = new URL(req.url);
+  if (url.origin !== self.location.origin) return;   // 天气接口等跨域请求不接管
+
+  const isNavigation = req.mode === 'navigate';
+  const isHtml = isNavigation || url.pathname.endsWith('/')
+    || url.pathname.endsWith('.html') || url.pathname.endsWith('/index.html');
+
+  if (isHtml) {
+    // 网络优先：拿到就用新的，顺手更新缓存；断网才回退缓存
+    event.respondWith(
+      fetch(req)
+        .then((res) => {
+          if (res && res.ok) {
+            const copy = res.clone();
+            caches.open(VERSION).then((c) => c.put(req, copy)).catch(() => {});
+          }
+          return res;
+        })
+        .catch(() => caches.match(req).then((hit) => hit || caches.match('./index.html')))
+    );
+    return;
+  }
+
+  // 静态资源：缓存优先 + 后台更新（stale-while-revalidate）
   event.respondWith(
     caches.match(req).then((hit) => {
-      if (hit) return hit;
-      return fetch(req).then((res) => {
-        if (res.ok) {
-          const copy = res.clone();
-          caches.open(VERSION).then((c) => c.put(req, copy)).catch(() => {});
-        }
-        return res;
-      }).catch(() => caches.match('./index.html'));
+      const network = fetch(req)
+        .then((res) => {
+          if (res && res.ok) {
+            const copy = res.clone();
+            caches.open(VERSION).then((c) => c.put(req, copy)).catch(() => {});
+          }
+          return res;
+        })
+        .catch(() => hit);
+      return hit || network;
     })
   );
 });

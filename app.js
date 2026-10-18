@@ -583,5 +583,5 @@ function loadCachedWeek() {
   }
 }
 
-self.__APP_VERSION__ = '1.0';
+self.__APP_VERSION__ = '2026-10-19 · sw3';
 document.addEventListener('DOMContentLoaded', init);
