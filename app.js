@@ -1,8 +1,8 @@
 // 查班小助手 PWA —— 主逻辑
 // 解析全部在本地完成（js/xlsx.js、js/xls.js、js/parser.js、js/rooms.js），数据只存 localStorage。
 
-import { fetchWeather } from './weather.js?v=2026-10-19T00%3A09%3A42';
-import { buildTips } from './tips.js?v=2026-10-19T00%3A09%3A42';
+import { fetchWeather } from './weather.js?v=2026-10-19T00%3A14%3A30';
+import { buildTips } from './tips.js?v=2026-10-19T00%3A14%3A30';
 
 const K = {
   doctorRows: 'sa.doctorRows',
@@ -104,10 +104,10 @@ async function loadModules() {
       return false;
     }
   };
-  await load('xlsx', './xlsx.js?v=2026-10-19T00%3A09%3A42');
-  await load('xls', './xls.js?v=2026-10-19T00%3A09%3A42');
-  await load('parser', './parser.js?v=2026-10-19T00%3A09%3A42');
-  await load('rooms', './rooms.js?v=2026-10-19T00%3A09%3A42');
+  await load('xlsx', './xlsx.js?v=2026-10-19T00%3A14%3A30');
+  await load('xls', './xls.js?v=2026-10-19T00%3A14%3A30');
+  await load('parser', './parser.js?v=2026-10-19T00%3A14%3A30');
+  await load('rooms', './rooms.js?v=2026-10-19T00%3A14%3A30');
   if (!mod.parser) {
     toast('解析模块未就绪，页面仍可打开');
   }
@@ -528,6 +528,8 @@ async function init() {
     hardReload();
   };
   $('btnRefresh').onclick = () => hardReload();
+  $('buildLine').textContent = '版本 ' + (self.__APP_VERSION__ || '未知');
+  $('btnSelfCheck').onclick = runSelfCheck;
   checkForUpdate();
 
   $('btnGuide').onclick = () => {
@@ -582,6 +584,86 @@ async function init() {
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js').catch(() => {});
   }
+}
+
+// 自检：把当前导入的表过一遍规则，直接告诉用户在浏览器里到底认出了什么
+function runSelfCheck() {
+  const lines = [];
+  const doctorRows = store.json(K.doctorRows, null);
+  const reporterRows = store.json(K.reporterRows, null);
+  lines.push('版本：' + (self.__APP_VERSION__ || '未知'));
+  lines.push('');
+
+  if (!doctorRows) {
+    lines.push('还没导入医生排班表');
+    alert(lines.join('\n'));
+    return;
+  }
+  if (!mod.parser || !mod.rooms) {
+    lines.push('解析模块没加载成功（可能是缓存问题，点「强制刷新」再试）');
+    alert(lines.join('\n'));
+    return;
+  }
+
+  // 扫全表，统计带标记的单元格
+  const marks = [];
+  for (const row of doctorRows) {
+    for (const cell of row) {
+      if (!cell) continue;
+      const mark = mod.parser.roomMark(cell);
+      if (mark) marks.push(cell + ' → ' + mod.parser.canonicalRoom(cell) + '（人名后标：' + mark + '）');
+    }
+  }
+  lines.push('医生表行数：' + doctorRows.length);
+  lines.push('检测到带标记的单元格：' + marks.length + ' 个');
+  marks.slice(0, 8).forEach((m) => lines.push('  · ' + m));
+  if (marks.length > 8) lines.push('  · …还有 ' + (marks.length - 8) + ' 个');
+  lines.push('');
+
+  const rep = getReporterResult();
+  let rooms = [];
+  try {
+    rooms = mod.rooms.buildRooms(doctorRows, rep);
+  } catch (e) {
+    lines.push('诊室读取失败：' + e.message);
+    alert(lines.join('\n'));
+    return;
+  }
+  const merged = rooms.filter((r) => r.forms.length > 1);
+  lines.push('诊室总数：' + rooms.length + '，其中合并了多种写法的：' + merged.length + ' 个');
+  merged.slice(0, 10).forEach((r) => lines.push('  · ' + r.display + ' ← ' + r.forms.join('、')));
+  if (merged.length > 10) lines.push('  · …还有 ' + (merged.length - 10) + ' 个');
+  lines.push('');
+
+  // 抽查：合并后的「培训」诊室，明细里有没有 （培训）
+  const trainRoom = merged.find((r) => r.forms.some((x) => x.includes('培训')));
+  if (!trainRoom) {
+    lines.push('提示：这张表里没有「（培训）」的写法，所以看不到（培训）标记。');
+  } else {
+    const detail = mod.rooms.roomDetail(doctorRows, rep, trainRoom.key);
+    let tagged = 0;
+    const sample = [];
+    for (const day of detail.days) {
+      for (const half of [day.am, day.pm]) {
+        for (const name of (half.doctors || [])) {
+          if (name.includes('培训')) {
+            tagged++;
+            if (sample.length < 5) sample.push(day.weekLabel + ' ' + name);
+          }
+        }
+      }
+    }
+    lines.push('抽查「' + trainRoom.display + '」：带（培训）的人次 ' + tagged);
+    sample.forEach((s) => lines.push('  · ' + s));
+  }
+
+  // 报告员表
+  if (reporterRows) {
+    const rep2 = mod.parser.parseReporter(reporterRows);
+    if (rep2.ok) lines.push('', '报告员表：' + rep2.entries.length + ' 人');
+  }
+
+  alert(lines.join('\n'));
 }
 
 async function hardReload() {
@@ -704,5 +786,5 @@ function loadCachedWeek() {
   }
 }
 
-self.__APP_VERSION__ = '2026-10-19T00:09:42';
+self.__APP_VERSION__ = '2026-10-19T00:14:30';
 document.addEventListener('DOMContentLoaded', init);

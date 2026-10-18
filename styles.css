@@ -362,6 +362,13 @@ html, body {
 .empty .btn-primary { width: 100%; }
 
 .foot { margin-top: 18px; }
+.build-line {
+  margin-top: 4px !important;
+  font-size: 10.5px !important;
+  color: #B9C0CF !important;
+  font-variant-numeric: tabular-nums;
+}
+
 .foot p {
   margin: 0;
   font-size: 11px;
