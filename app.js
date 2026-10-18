@@ -2,6 +2,7 @@
 // 解析全部在本地完成（js/xlsx.js、js/xls.js、js/parser.js、js/rooms.js），数据只存 localStorage。
 
 import { fetchWeather } from './weather.js';
+import { buildTips } from './tips.js';
 
 const K = {
   doctorRows: 'sa.doctorRows',
@@ -210,9 +211,12 @@ function renderList(days) {
     const el = document.createElement('section');
     el.className = 'day';
 
-    const weatherText = state.weather[d.ymd] || '';
+    const wRaw = state.weather[d.ymd];
+    const wObj = (wRaw && typeof wRaw === 'object') ? wRaw : null;
+    const weatherText = wObj ? wObj.text : (typeof wRaw === 'string' ? wRaw : '');
     const past = d.ymd && d.ymd < today;
     const isToday = d.ymd === today;
+    const tips = buildTips(d, wObj);
     let pair = null;
     if (d.type !== 'REST' && mod.parser?.pairLabel) {
       try { pair = mod.parser.pairLabel(getReporterResult(), d.raw, d.ymd); } catch { pair = null; }
@@ -231,10 +235,57 @@ function renderList(days) {
       ${d.startTime ? `<p class="day-line">上班 ${d.startTime}${d.preTime ? ` · 提醒 ${d.preTime}` : ''}${isToday ? '<span class="today-flag">今天</span>' : ''}</p>` : ''}
       ${pair ? `<p class="day-line">搭档：${escapeHtml(pair)}</p>` : ''}
       <p class="day-weather">☁️ ${escapeHtml(weatherText || (past ? '已过' : (state.weatherAt ? '暂无预报' : '天气加载中…')))}</p>
-      ${d.tips ? `<div class="day-tips">${escapeHtml(d.tips)}</div>` : ''}
+      ${tips ? `<div class="day-tips">${escapeHtml(tips)}</div>` : ''}
     `;
+    attachLongPress(el, () => copyDay(d));
     list.appendChild(el);
   }
+}
+
+function copyDay(d) {
+  const style = TYPE_STYLE[d.type] || TYPE_STYLE.REST;
+  const head = [d.weekLabel || weekOf(d.ymd), d.dateLabel || fmtDateLabel(d.ymd), style.label,
+    d.startTime || ''].filter(Boolean).join(' ');
+  const lines = [head];
+  if (d.raw) lines.push('表内写法：' + d.raw);
+  if (d.workInfo) lines.push(d.workInfo);
+  const text = lines.join('\n');
+  const done = () => toast('已复制：' + head);
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done).catch(() => fallbackCopy(text, done));
+  } else {
+    fallbackCopy(text, done);
+  }
+}
+
+function fallbackCopy(text, done) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand('copy'); done(); } catch (e) { toast('复制失败，请手动选中'); }
+  ta.remove();
+}
+
+// 触摸长按 550ms 触发；桌面端用 contextmenu 兜底
+function attachLongPress(el, handler) {
+  let timer = null;
+  const start = () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      timer = null;
+      if (navigator.vibrate) navigator.vibrate(10);
+      handler();
+    }, 550);
+  };
+  const cancel = () => { if (timer) { clearTimeout(timer); timer = null; } };
+  el.addEventListener('touchstart', start, { passive: true });
+  el.addEventListener('touchend', cancel);
+  el.addEventListener('touchmove', cancel, { passive: true });
+  el.addEventListener('touchcancel', cancel);
+  el.addEventListener('contextmenu', (e) => { e.preventDefault(); handler(); });
 }
 
 function escapeHtml(s) {
@@ -472,6 +523,21 @@ async function init() {
     $('dlgSettings').showModal();
   };
   $('btnCloseSettings').onclick = () => $('dlgSettings').close();
+  $('btnGuide').onclick = () => {
+    const lines = [
+      '1. 在微信里点开排班 xlsx → 右上角 ··· → 用其他应用打开 → 存储到「文件」',
+      '2. 回到这里点「导入排班表」，从「文件」里选它；导入时选「医生排班表」或「报告员表」',
+      '3. 顶部输入姓名 → 查询（下面可切「医生 / 报告员」）',
+      '4. 想看搭档、天气、贴心提醒：日卡上直接就有；长按某天可以复制',
+      '5. 要提醒：点「导出到日历」→ 打开生成的 .ics → 日历里「添加全部」，到点由系统日历提醒',
+      '6. 想少点几次：Safari 分享 → 添加到主屏幕，以后从桌面图标打开',
+      '',
+      '说明：网页版没有后台闹钟，所以提醒走系统日历；数据只存在这台设备上。',
+    ];
+    const dlg = $('dlgSettings');
+    dlg.close();
+    alert(lines.join('\\n'));
+  };
   $('btnClear').onclick = () => {
     if (!confirm('清空本机的表、姓名和天气缓存？')) return;
     Object.values(K).forEach((k) => store.del(k));

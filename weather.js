@@ -1,5 +1,5 @@
-// 天气：浏览器里只能用支持 CORS 的源，open-meteo 是最稳的（含过去几天，可回取 92 天）
-// 只取需要的日期，其他字段对齐 Android 版的展示格式：`济宁市 小雨 13~18℃  东风2级`
+// 天气：浏览器里只能用支持 CORS 的源，open-meteo 是最稳的（可回取过去 92 天）
+// 返回结构化数据，方便 TipsEngine 用：{ text, type, high, low, wind, windLevel, notice }
 
 const CITY = '济宁市';
 const LAT = 35.415;
@@ -45,7 +45,7 @@ function daysBetween(a, b) {
 
 /**
  * @param {string[]} ymds 需要的日期（YYYY-MM-DD）
- * @returns {Promise<Record<string,string>>} ymd -> 展示文案
+ * @returns {Promise<Record<string, {text,type,high,low,wind,windLevel,notice}>>}
  */
 export async function fetchWeather(ymds) {
   const list = [...new Set(ymds.filter(Boolean))].sort();
@@ -58,7 +58,7 @@ export async function fetchWeather(ymds) {
 
   const url = `https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}`
     + '&daily=weather_code,temperature_2m_max,temperature_2m_min,'
-    + 'wind_speed_10m_max,wind_direction_10m_dominant'
+    + 'precipitation_probability_max,wind_speed_10m_max,wind_direction_10m_dominant'
     + `&timezone=Asia%2FShanghai&past_days=${pastDays}&forecast_days=${forecastDays}`;
 
   const res = await fetch(url, { cache: 'no-store' });
@@ -71,17 +71,29 @@ export async function fetchWeather(ymds) {
   for (let i = 0; i < daily.time.length; i++) {
     const ymd = daily.time[i];
     const code = daily.weather_code?.[i];
+    if (code === null || code === undefined) continue;
+    const type = WMO[code] ?? '多云';
     const high = daily.temperature_2m_max?.[i];
     const low = daily.temperature_2m_min?.[i];
     const speed = daily.wind_speed_10m_max?.[i];
     const dir = daily.wind_direction_10m_dominant?.[i];
-    if (code === null || code === undefined) continue;
-    let text = `${CITY} ${WMO[code] ?? '多云'}`;
-    if (high !== null && high !== undefined) text += ` ${Math.round(low)}~${Math.round(high)}℃`;
-    if (speed !== null && speed !== undefined) {
-      text += `  ${windDir(dir ?? 0)}风${kmhToLevel(speed)}级`;
+    const rainPct = daily.precipitation_probability_max?.[i];
+
+    const hi = (high === null || high === undefined) ? null : Math.round(high);
+    const lo = (low === null || low === undefined) ? null : Math.round(low);
+    const level = (speed === null || speed === undefined) ? null : kmhToLevel(speed);
+    const wind = (level === null) ? '' : (windDir(dir ?? 0) + '风' + level + '级');
+
+    let text = `${CITY} ${type}`;
+    if (hi !== null) text += ` ${lo}~${hi}℃`;
+    if (wind) text += `  ${wind}`;
+
+    let notice = '';
+    if (rainPct !== null && rainPct !== undefined && rainPct > 0) {
+      notice = `降水概率${rainPct}%`;
     }
-    out[ymd] = text;
+
+    out[ymd] = { text, type, high: hi, low: lo, wind, windLevel: level, notice };
   }
   return out;
 }
