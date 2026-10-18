@@ -1,8 +1,8 @@
 // 查班小助手 PWA —— 主逻辑
 // 解析全部在本地完成（js/xlsx.js、js/xls.js、js/parser.js、js/rooms.js），数据只存 localStorage。
 
-import { fetchWeather } from './weather.js';
-import { buildTips } from './tips.js';
+import { fetchWeather } from './weather.js?v=2026-10-19T00%3A06%3A34';
+import { buildTips } from './tips.js?v=2026-10-19T00%3A06%3A34';
 
 const K = {
   doctorRows: 'sa.doctorRows',
@@ -649,5 +649,5 @@ function loadCachedWeek() {
   }
 }
 
-self.__APP_VERSION__ = '2026-10-19 · sw3';
+self.__APP_VERSION__ = '2026-10-19T00:06:34';
 document.addEventListener('DOMContentLoaded', init);

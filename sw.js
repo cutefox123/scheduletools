@@ -1,7 +1,7 @@
 // 查班小助手 · Service Worker
 // 策略：HTML/导航 走网络优先（保证每次打开都是最新的），静态资源走缓存优先（离线可看）。
 // 缓存版本必须随发布递增，否则用户会一直吃旧缓存。
-const VERSION = 'sw-2026-10-19T00:02:58';
+const VERSION = 'sw-2026-10-19T00:06:34';
 const SHELL = [
   './',
   './index.html',
@@ -71,7 +71,26 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 静态资源：缓存优先 + 后台更新（stale-while-revalidate）
+  const isCode = url.pathname.endsWith('.js') || url.pathname.endsWith('.css')
+    || url.pathname.endsWith('.webmanifest');
+
+  if (isCode) {
+    // 代码走网络优先：只要在线就一定用最新的，断网才回退缓存
+    event.respondWith(
+      fetch(req)
+        .then((res) => {
+          if (res && res.ok) {
+            const copy = res.clone();
+            caches.open(VERSION).then((c) => c.put(req, copy)).catch(() => {});
+          }
+          return res;
+        })
+        .catch(() => caches.match(req))
+    );
+    return;
+  }
+
+  // 图片等静态资源：缓存优先 + 后台更新（stale-while-revalidate）
   event.respondWith(
     caches.match(req).then((hit) => {
       const network = fetch(req)
