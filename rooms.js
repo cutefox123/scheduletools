@@ -7,6 +7,8 @@
 //   roomDetail(doctorMatrix, repResult, key) -> { ok, display, days: [...] }
 
 import {
+  roomMark,
+  markRoom,
   markListen,
   isListen,
   findHeader,
@@ -59,7 +61,7 @@ function putRoom(map, token) {
   if (key === '') return;
   // 写法本身已等于主键（如 东6、高端1、6诊）→ 优先当展示名；
   // 别名源写法（东介入门诊、高端查体1、介入门诊）次之。
-  const isTarget = canonicalRoom(token) === key && !isListen(token);
+  const isTarget = canonicalRoom(token) === key && roomMark(token) === '';
   const r = map.get(key);
   if (r == null) {
     map.set(key, { key, display: token, forms: [token], displayIsTarget: isTarget });
@@ -119,7 +121,7 @@ export { searchRooms as search };
 function addIfRoom(list, person, token, roomKey) {
   if (!isRoomToken(token)) return;
   if (primaryKey(token) !== roomKey) return;
-  const tagged = markListen(person, token);
+  const tagged = markRoom(person, token);
   if (!list.includes(tagged)) list.push(tagged);
 }
 

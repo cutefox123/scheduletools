@@ -775,26 +775,40 @@ export function canonicalRoom(token) {
   if (token == null) return '';
   let t = stripWs(token);
   if (t === '' || t === '休') return '';
+  // 先去掉末尾的（听）/（听诊）/（培训）：东床旁（听）→东床旁、3诊（培训）→3诊
+  t = t.replace(/[（(](听|听诊|培训)[）)]$/, '');
   t = t.split('二期').join('2期');
   if (t.length > 1 && t.charAt(t.length - 1) === '诊' && /\d/.test(t.charAt(t.length - 2))) {
     t = t.substring(0, t.length - 1);
   }
-  // 东床旁（听）和东床旁是同一个位置：主键合并，人名后面加（听）区分
-  t = t.replace(/[（(](听|听诊)[）)]$/, '');
   return t;
 }
 
-/** 该单元格是不是听班（如 东床旁（听））。 */
-export function isListen(token) {
-  if (token == null) return false;
-  return /[（(]听/.test(stripWs(token));
+/** 诊室词末尾的标记：听 / 听诊 / 培训（如 东床旁（听）、3诊（培训））。 */
+export function roomMark(token) {
+  if (token == null) return '';
+  const m = stripWs(token).match(/[（(](听诊|听|培训)[）)]$/);
+  if (!m) return '';
+  return m[1] === '听诊' ? '听' : m[1];
 }
 
-/** 听班的人名后面加（听）；其他人原样返回。 */
+/** 带标记的人名：张三（听）/ 李四（培训）；其他人原样返回。 */
+export function markRoom(name, token) {
+  const mark = roomMark(token);
+  if (name == null || name === '' || mark === '') return name;
+  const suffix = '（' + mark + '）';
+  if (name.endsWith(suffix) || name.endsWith('(' + mark + ')')) return name;
+  return name + suffix;
+}
+
+/** 兼容旧调用：是否听班。 */
+export function isListen(token) {
+  return roomMark(token) === '听';
+}
+
+/** 兼容旧调用：给听班的人名加后缀。 */
 export function markListen(name, token) {
-  if (name == null || name === '' || !isListen(token)) return name;
-  if (name.endsWith('（听）') || name.endsWith('(听)')) return name;
-  return name + '（听）';
+  return markRoom(name, token);
 }
 
 /** 合并关键字的诊室主键：别名源归并到别名目标（诊室目录按此归组）。 */
@@ -840,6 +854,10 @@ export function sameRoom(a, b) {
 export function isRoomToken(token) {
   const t = stripWs(token);
   if (t === '') return false;
+  // 末尾带（听）/（听诊）/（培训）的，按去掉标记后的位置判断：
+  // 东床旁（听）→东床旁、3诊（培训）→3诊、东12（培训）→东12
+  const bare = t.replace(/[（(](听诊|听|培训)[）)]$/, '');
+  if (bare !== t) return bare !== '' && isRoomToken(bare);
   // 只要带“床旁”二字就当位置，一律可查询
   if (t.includes('床旁')) return true;
   // “中”“东中”“值中”=中班（午间连班），不是位置，不参与诊室目录与配对
@@ -932,7 +950,7 @@ export function reportersFor(data, ymd, halfIdx, doctorToken) {
       const am = halfOf(e.cells[di], 0);
       const pm = halfOf(e.cells[di], 1);
       const place = mid === midKey(am) ? am : pm;
-      const tagged = markListen(e.name, place);
+      const tagged = markRoom(e.name, place);
       if ((mid === midKey(am) || mid === midKey(pm)) && !out.includes(tagged)) {
         out.push(tagged);
       }
@@ -948,7 +966,7 @@ export function reportersFor(data, ymd, halfIdx, doctorToken) {
     // 值/东值/西值（分诊台主管）、科研、请假等非位置行不参与位置配对
     if (half === '' || half === '休' || !isRoomToken(half)) continue;
     const hk = canonicalRoom(half);
-    const tagged = markListen(e.name, half);
+    const tagged = markRoom(e.name, half);
     if (hk !== '' && (keys.includes(hk) || sameRoom(half, doctorToken)) && !out.includes(tagged)) {
       out.push(tagged);
     }
