@@ -1,19 +1,19 @@
 // 查班小助手 · Service Worker
 // 策略：HTML/导航 走网络优先（保证每次打开都是最新的），静态资源走缓存优先（离线可看）。
 // 缓存版本必须随发布递增，否则用户会一直吃旧缓存。
-const VERSION = 'sw-2026-10-19T00:06:34';
+const VERSION = 'sw-2026-10-19T00:07:28';
 const SHELL = [
   './',
   './index.html',
   './styles.css',
   './manifest.webmanifest',
-  './app.js',
-  './weather.js',
-  './xlsx.js',
-  './xls.js',
-  './parser.js',
-  './rooms.js',
-  './tips.js',
+  './app.js?v=2026-10-19T00%3A07%3A28',
+  './weather.js?v=2026-10-19T00%3A07%3A28',
+  './xlsx.js?v=2026-10-19T00%3A07%3A28',
+  './xls.js?v=2026-10-19T00%3A07%3A28',
+  './parser.js?v=2026-10-19T00%3A07%3A28',
+  './rooms.js?v=2026-10-19T00%3A07%3A28',
+  './tips.js?v=2026-10-19T00%3A07%3A28',
   './icon-180.png',
   './icon-192.png',
   './icon-512.png',
@@ -58,7 +58,7 @@ self.addEventListener('fetch', (event) => {
   if (isHtml) {
     // 网络优先：拿到就用新的，顺手更新缓存；断网才回退缓存
     event.respondWith(
-      fetch(req)
+      fetch(req, { cache: 'no-store' })
         .then((res) => {
           if (res && res.ok) {
             const copy = res.clone();
@@ -77,7 +77,7 @@ self.addEventListener('fetch', (event) => {
   if (isCode) {
     // 代码走网络优先：只要在线就一定用最新的，断网才回退缓存
     event.respondWith(
-      fetch(req)
+      fetch(req, { cache: 'no-store' })
         .then((res) => {
           if (res && res.ok) {
             const copy = res.clone();
