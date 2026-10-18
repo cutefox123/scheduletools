@@ -1,8 +1,8 @@
 // 查班小助手 PWA —— 主逻辑
 // 解析全部在本地完成（js/xlsx.js、js/xls.js、js/parser.js、js/rooms.js），数据只存 localStorage。
 
-import { fetchWeather } from './weather.js?v=2026-10-19T00%3A08%3A26';
-import { buildTips } from './tips.js?v=2026-10-19T00%3A08%3A26';
+import { fetchWeather } from './weather.js?v=2026-10-19T00%3A09%3A42';
+import { buildTips } from './tips.js?v=2026-10-19T00%3A09%3A42';
 
 const K = {
   doctorRows: 'sa.doctorRows',
@@ -104,10 +104,10 @@ async function loadModules() {
       return false;
     }
   };
-  await load('xlsx', './xlsx.js?v=2026-10-19T00%3A08%3A26');
-  await load('xls', './xls.js?v=2026-10-19T00%3A08%3A26');
-  await load('parser', './parser.js?v=2026-10-19T00%3A08%3A26');
-  await load('rooms', './rooms.js?v=2026-10-19T00%3A08%3A26');
+  await load('xlsx', './xlsx.js?v=2026-10-19T00%3A09%3A42');
+  await load('xls', './xls.js?v=2026-10-19T00%3A09%3A42');
+  await load('parser', './parser.js?v=2026-10-19T00%3A09%3A42');
+  await load('rooms', './rooms.js?v=2026-10-19T00%3A09%3A42');
   if (!mod.parser) {
     toast('解析模块未就绪，页面仍可打开');
   }
@@ -523,23 +523,12 @@ async function init() {
     $('dlgSettings').showModal();
   };
   $('btnCloseSettings').onclick = () => $('dlgSettings').close();
-  $('btnHardReload').onclick = async () => {
-    toast('正在清理缓存…');
-    try {
-      if (window.caches) {
-        const keys = await caches.keys();
-        await Promise.all(keys.map((k) => caches.delete(k)));
-      }
-      if (navigator.serviceWorker) {
-        const regs = await navigator.serviceWorker.getRegistrations();
-        await Promise.all(regs.map((r) => r.unregister()));
-      }
-    } catch (e) {
-      // 忽略：能清多少清多少
-    }
+  $('btnHardReload').onclick = () => {
     $('dlgSettings').close();
-    location.replace(location.pathname + '?fresh=' + Date.now());
+    hardReload();
   };
+  $('btnRefresh').onclick = () => hardReload();
+  checkForUpdate();
 
   $('btnGuide').onclick = () => {
     const lines = [
@@ -585,9 +574,57 @@ async function init() {
   $('btnRooms').onclick = openRooms;
   $('btnCloseRooms').onclick = () => $('dlgRooms').close();
 
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') checkForUpdate();
+  });
+
   // 注册 service worker（断网也能打开）
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
+}
+
+async function hardReload() {
+  toast('正在刷新到最新版…');
+  try {
+    if (window.caches) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map((k) => caches.delete(k)));
+    }
+    if (navigator.serviceWorker) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map((r) => r.unregister()));
+    }
+  } catch (e) {
+    // 能清多少清多少
+  }
+  location.replace(location.pathname + '?fresh=' + Date.now());
+}
+
+// 拉一次线上 index.html，比对构建戳；不一样就把首页按钮点亮
+let updateCheckBusy = false;
+async function checkForUpdate() {
+  if (updateCheckBusy) return;
+  updateCheckBusy = true;
+  try {
+    const res = await fetch(location.pathname + '?upt=' + Date.now(), { cache: 'no-store' });
+    if (!res.ok) return;
+    const html = await res.text();
+    const m = html.match(/<!-- build:([^>]*) -->/);
+    if (!m) return;
+    const remote = m[1].trim();
+    const local = self.__APP_VERSION__ || '';
+    if (remote && local && remote !== local) {
+      const btn = $('btnRefresh');
+      if (!btn) return;
+      btn.textContent = '有新版本 · 点我刷新';
+      btn.classList.add('has-update');
+      btn.setAttribute('title', '本地 ' + local + ' → 线上 ' + remote);
+    }
+  } catch (e) {
+    // 离线或网络差：保持原样
+  } finally {
+    updateCheckBusy = false;
   }
 }
 
@@ -667,5 +704,5 @@ function loadCachedWeek() {
   }
 }
 
-self.__APP_VERSION__ = '2026-10-19T00:08:26';
+self.__APP_VERSION__ = '2026-10-19T00:09:42';
 document.addEventListener('DOMContentLoaded', init);

@@ -76,6 +76,45 @@ html, body {
   color: #D4DDFF;
 }
 
+.hero-sub-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.hero-sub-row .hero-sub {
+  flex: 1;
+  min-width: 0;
+  margin: 6px 0 14px;
+}
+
+/* 首页「刷新」按钮：常驻但与副标题同排，有新版时变醒目 */
+.hero-refresh {
+  flex: 0 0 auto;
+  margin-bottom: 8px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, .45);
+  background: rgba(255, 255, 255, .16);
+  color: #fff;
+  font-size: 12px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.hero-refresh.has-update {
+  border-color: #FFE08A;
+  background: #FFB020;
+  color: #4A2C00;
+  font-weight: 700;
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 176, 32, .55); }
+  50% { box-shadow: 0 0 0 7px rgba(255, 176, 32, 0); }
+}
+
 .search-row {
   display: flex;
   gap: 10px;
