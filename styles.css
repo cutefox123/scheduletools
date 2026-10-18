@@ -349,6 +349,20 @@ html, body {
   color: var(--text);
 }
 
+/* 日卡上的「（培训）/（听）」标记 */
+.badge-mark {
+  margin-left: 6px;
+  background: #FFF0E2;
+  color: #C2410C;
+  font-weight: 700;
+}
+
+/* 诊室明细里的人名标记 */
+.name-mark {
+  color: #C2410C;
+  font-weight: 700;
+}
+
 .today-flag {
   font-size: 11px;
   color: var(--brand);

@@ -1,8 +1,8 @@
 // 查班小助手 PWA —— 主逻辑
 // 解析全部在本地完成（js/xlsx.js、js/xls.js、js/parser.js、js/rooms.js），数据只存 localStorage。
 
-import { fetchWeather } from './weather.js?v=2026-10-19T00%3A14%3A30';
-import { buildTips } from './tips.js?v=2026-10-19T00%3A14%3A30';
+import { fetchWeather } from './weather.js?v=2026-10-19T00%3A21%3A21';
+import { buildTips } from './tips.js?v=2026-10-19T00%3A21%3A21';
 
 const K = {
   doctorRows: 'sa.doctorRows',
@@ -104,10 +104,10 @@ async function loadModules() {
       return false;
     }
   };
-  await load('xlsx', './xlsx.js?v=2026-10-19T00%3A14%3A30');
-  await load('xls', './xls.js?v=2026-10-19T00%3A14%3A30');
-  await load('parser', './parser.js?v=2026-10-19T00%3A14%3A30');
-  await load('rooms', './rooms.js?v=2026-10-19T00%3A14%3A30');
+  await load('xlsx', './xlsx.js?v=2026-10-19T00%3A21%3A21');
+  await load('xls', './xls.js?v=2026-10-19T00%3A21%3A21');
+  await load('parser', './parser.js?v=2026-10-19T00%3A21%3A21');
+  await load('rooms', './rooms.js?v=2026-10-19T00%3A21%3A21');
   if (!mod.parser) {
     toast('解析模块未就绪，页面仍可打开');
   }
@@ -217,6 +217,9 @@ function renderList(days) {
     const past = d.ymd && d.ymd < today;
     const isToday = d.ymd === today;
     const tips = buildTips(d, wObj);
+    const mark = (mod.parser && mod.parser.roomMark)
+      ? (mod.parser.roomMark(d.raw) || mod.parser.roomMark((d.raw || '').split('/')[0]))
+      : '';
     let pair = null;
     if (d.type !== 'REST' && mod.parser?.pairLabel) {
       try { pair = mod.parser.pairLabel(getReporterResult(), d.raw, d.ymd); } catch { pair = null; }
@@ -229,6 +232,7 @@ function renderList(days) {
           <span class="d">${d.ymd ? Number(d.ymd.slice(5, 7)) + '.' + Number(d.ymd.slice(8, 10)) : ''}</span>
         </div>
         <span class="badge" style="background:${style.bg};color:${style.fg}">${style.label}</span>
+        ${mark ? `<span class="badge badge-mark">（${escapeHtml(mark)}）</span>` : ''}
       </div>
       <p class="day-raw">${escapeHtml(d.raw || '（单元格为空）')}</p>
       ${d.workInfo ? `<p class="day-line">${escapeHtml(d.workInfo)}</p>` : ''}
@@ -763,10 +767,20 @@ function showRoomDetail(doctorRows, rep, room) {
     const div = document.createElement('div');
     div.style.cssText = 'padding:10px 6px;border-bottom:1px solid var(--border)';
     div.innerHTML = `<b>${escapeHtml(d.weekLabel)}　${escapeHtml(d.dateLabel)}</b><br>`
-      + `<span class="day-line">上午：${escapeHtml(detailHalf(d.am))}</span><br>`
-      + `<span class="day-line">下午：${escapeHtml(detailHalf(d.pm))}</span>`;
+      + `<span class="day-line">上午：${detailHalf(d.am)}</span><br>`
+      + `<span class="day-line">下午：${detailHalf(d.pm)}</span>`;
     listEl.appendChild(div);
   }
+}
+
+function highlightMark(name) {
+  const m = String(name).match(/^(.*?)(（(?:培训|听)）)$/);
+  if (!m) return escapeHtml(name);
+  return escapeHtml(m[1]) + '<b class="name-mark">' + escapeHtml(m[2]) + '</b>';
+}
+
+function namesHtml(list) {
+  return list.map(highlightMark).join('、');
 }
 
 function detailHalf(half) {
@@ -774,8 +788,8 @@ function detailHalf(half) {
   const docs = (half.doctors || []).filter(Boolean);
   const reps = (half.reporters || []).filter(Boolean);
   if (!docs.length && !reps.length) return '—';
-  let s = docs.length ? docs.join('、') : '—';
-  if (reps.length) s += `　·　搭档：${reps.join('、')}`;
+  let s = docs.length ? namesHtml(docs) : '—';
+  if (reps.length) s += '　·　搭档：' + namesHtml(reps);
   return s;
 }
 
@@ -786,5 +800,5 @@ function loadCachedWeek() {
   }
 }
 
-self.__APP_VERSION__ = '2026-10-19T00:14:30';
+self.__APP_VERSION__ = '2026-10-19T00:21:21';
 document.addEventListener('DOMContentLoaded', init);
