@@ -21,7 +21,7 @@ import {
   primaryKey,
   canonicalRoom,
   dayLabelsOf,
-} from './parser.js?v=2026-10-20T13%3A41%3A00';
+} from './parser.js?v=2026-10-20T13%3A46%3A51';
 
 // ---------------- 诊室目录 ----------------
 
@@ -79,20 +79,31 @@ function putRoom(map, token) {
  * 收集全部诊室。对应 RoomDirectory.buildRooms 的 JSON 形态：
  * [{ key, display, forms: [写法…] }]，顺序 = 首次出现顺序。
  */
-export const MID_ROOM_KEY = '中班';
+/** 中班诊室的 key：写法 + 「班」，例如 中→中班、东中→东中班、值中→值中班。 */
+export function midRoomKey(variant) {
+  return variant + '班';
+}
 
-/** 表里有中班（中/东中/西中/值中）时返回「中班」诊室，没有返回 null。 */
-function collectMidRoom(doctorMatrix, repResult) {
-  const forms = [];
+/** 该诊室 key 对应的中班写法（中/东中/西中/值中），不是中班诊室返回 null。 */
+export function midVariantOf(roomKey) {
+  if (roomKey == null || !roomKey.endsWith('班')) return null;
+  const v = roomKey.substring(0, roomKey.length - 1);
+  return midKey(v) === '' ? null : v;
+}
+
+/** 表里出现的中班写法，各生成一个诊室（按位置查询，不做归类）。 */
+function collectMidRooms(doctorMatrix, repResult) {
+  const variants = [];
   const addForms = (cell) => {
     const t = cell == null ? '' : stripWs(cell);
     if (t === '') return;
     for (const half of t.split('/')) {
-      if (midKey(half) !== '' && !forms.includes(half)) forms.push(half);
+      const v = midKey(half);
+      if (v !== '' && !variants.includes(v)) variants.push(v);
     }
   };
   const h = findHeader(doctorMatrix);
-  if (h.error != null) return null;
+  if (h.error != null) return [];
   for (const row of doctorMatrix) {
     if (doctorNameCol(row, h.firstDateCol) < 0) continue;
     for (const dc of h.dateCols) addForms(dc.col < row.length ? row[dc.col] : '');
@@ -100,8 +111,7 @@ function collectMidRoom(doctorMatrix, repResult) {
   if (repResult != null && Array.isArray(repResult.entries)) {
     for (const e of repResult.entries) for (const cell of e.cells) addForms(cell);
   }
-  if (!forms.length) return null;
-  return { key: MID_ROOM_KEY, display: MID_ROOM_KEY, forms };
+  return variants.map((v) => ({ key: midRoomKey(v), display: midRoomKey(v), forms: [v] }));
 }
 
 /** 中班人名后缀：东中/西中/值中 标出来，纯「中」不标。 */
@@ -116,8 +126,8 @@ export function markMid(name, token) {
 export function buildRooms(doctorMatrix, repResult) {
   const { rooms } = collectRooms(doctorMatrix, repResult);
   const out = rooms.map((r) => ({ key: r.key, display: r.display, forms: r.forms.slice() }));
-  const mid = collectMidRoom(doctorMatrix, repResult);
-  if (mid) out.push(mid);
+  const mid = collectMidRooms(doctorMatrix, repResult);
+  out.push(...mid);
   return out;
 }
 
@@ -158,10 +168,10 @@ export { searchRooms as search };
 
 /** 诊室匹配：中班诊室按 midKey 判断，其余按诊室主键。 */
 function addIfMatch(list, person, token, roomKey) {
-  if (roomKey === MID_ROOM_KEY) {
-    if (midKey(token) === '') return;
-    const taggedMid = markMid(person, token);
-    if (!list.includes(taggedMid)) list.push(taggedMid);
+  const variant = midVariantOf(roomKey);
+  if (variant !== null) {
+    if (variant !== midKey(token)) return;
+    if (!list.includes(person)) list.push(person);
     return;
   }
   addIfRoom(list, person, token, roomKey);
@@ -227,9 +237,8 @@ export function roomDetail(doctorMatrix, repResult, key) {
   if (h.error != null) {
     return { ok: false, display: '', error: h.error, days: [] };
   }
-  // 「中班」是虚拟诊室，collectRooms 里没有，这里补上
-  const mid = collectMidRoom(doctorMatrix, repResult);
-  if (mid) rooms.push(mid);
+  // 中班诊室是虚拟的，collectRooms 里没有，这里补上
+  rooms.push(...collectMidRooms(doctorMatrix, repResult));
   const room = findRoom(rooms, key);
   if (room == null) {
     return { ok: false, display: '', error: '没找到诊室「' + key + '」', days: [] };
@@ -239,5 +248,5 @@ export function roomDetail(doctorMatrix, repResult, key) {
 
 
 // 报告员一周排班与 Java 的 RoomDirectory.reporterWeek 对应，按 API 归属放在 parser.js；
-// 这里再导出一份，方便 import { reporterWeek } from './rooms.js?v=2026-10-20T13%3A41%3A00' 的用法。
-export { reporterWeek } from './parser.js?v=2026-10-20T13%3A41%3A00';
+// 这里再导出一份，方便 import { reporterWeek } from './rooms.js?v=2026-10-20T13%3A46%3A51' 的用法。
+export { reporterWeek } from './parser.js?v=2026-10-20T13%3A46%3A51';
