@@ -9,7 +9,6 @@
 import {
   midKey,
   effectiveMid,
-  rowCampusFlags,
   roomMark,
   markRoom,
   markListen,
@@ -23,7 +22,7 @@ import {
   primaryKey,
   canonicalRoom,
   dayLabelsOf,
-} from './parser.js?v=2026-10-21T00%3A53%3A09';
+} from './parser.js?v=2026-10-21T00%3A58%3A05';
 
 // ---------------- 诊室目录 ----------------
 
@@ -96,26 +95,22 @@ export function midVariantOf(roomKey) {
 /** 表里出现的中班写法，各生成一个诊室（按位置查询，不做归类）。 */
 function collectMidRooms(doctorMatrix, repResult) {
   const variants = [];
-  const addForms = (cell, rowHasWest, rowHasEast) => {
+  const addForms = (cell) => {
     const t = cell == null ? '' : stripWs(cell);
     if (t === '') return;
-    // 整格：西3/中→西中、东3/中→东中、值中→值中；
-    // 裸“中”看整行排班格：带西=西中、带东=东中、都不带=总院中。
-    const v = effectiveMid(t, rowHasWest, rowHasEast);
+    // 只看这一格：西3/中→西中、东3/中→东中、值中→值中、裸中→总院中。
+    const v = effectiveMid(t);
     if (v !== '' && !variants.includes(v)) variants.push(v);
   };
   const h = findHeader(doctorMatrix);
   if (h.error != null) return [];
   for (const row of doctorMatrix) {
     if (doctorNameCol(row, h.firstDateCol) < 0) continue;
-    // 只扫排班格，姓名/职称里的“西/东”不算整行院区
-    const f = rowCampusFlags(h.dateCols.map((dc) => (dc.col < row.length ? row[dc.col] : '')));
-    for (const dc of h.dateCols) addForms(dc.col < row.length ? row[dc.col] : '', f.west, f.east);
+    for (const dc of h.dateCols) addForms(dc.col < row.length ? row[dc.col] : '');
   }
   if (repResult != null && Array.isArray(repResult.entries)) {
     for (const e of repResult.entries) {
-      const f = rowCampusFlags(e.cells);
-      for (const cell of e.cells) addForms(cell, f.west, f.east);
+      for (const cell of e.cells) addForms(cell);
     }
   }
   return variants.map((v) => ({ key: midRoomKey(v), display: midRoomKey(v), forms: [v] }));
@@ -218,20 +213,19 @@ function detail(doctorMatrix, repResult, room, h) {
     pm: { doctors: [], reporters: [] },
   }));
 
-  // 中班诊室：必须按“整格 + 整行院区”判断，不能再拆成半天（否则
-  // “西3/中”“1诊/中”的“中”会全被当成总院中班）。
+  // 中班诊室：必须看“整个单元格”，不能拆成半天（否则
+  // “西3/中”“东3/中”里的“中”会全被当成总院中班）。
   const variant = midVariantOf(room.key);
   if (variant !== null) {
     for (const row of doctorMatrix) {
       const nameCol = doctorNameCol(row, h.firstDateCol);
       if (nameCol < 0) continue;
       const doctor = jtrim(row[nameCol]);
-      const f = rowCampusFlags(h.dateCols.map((dc) => (dc.col < row.length ? row[dc.col] : '')));
       const n = Math.min(h.dateCols.length, out.length);
       for (let i = 0; i < n; i++) {
         const dc = h.dateCols[i];
         const cell = dc.col < row.length ? row[dc.col] : '';
-        const v = effectiveMid(cell, f.west, f.east);
+        const v = effectiveMid(cell);
         if (v !== variant) continue;
         const half = midHalfIndex(cell) === 0 ? out[i].am : out[i].pm;
         pushUnique(half.doctors, doctor);
@@ -239,10 +233,9 @@ function detail(doctorMatrix, repResult, room, h) {
     }
     if (repResult != null && Array.isArray(repResult.entries)) {
       for (const e of repResult.entries) {
-        const f = rowCampusFlags(e.cells);
         const n = Math.min(h.dateCols.length, out.length, e.cells.length);
         for (let i = 0; i < n; i++) {
-          const v = effectiveMid(e.cells[i], f.west, f.east);
+          const v = effectiveMid(e.cells[i]);
           if (v !== variant) continue;
           const half = midHalfIndex(e.cells[i]) === 0 ? out[i].am : out[i].pm;
           pushUnique(half.reporters, e.name);
@@ -312,5 +305,5 @@ export function roomDetail(doctorMatrix, repResult, key) {
 
 
 // 报告员一周排班与 Java 的 RoomDirectory.reporterWeek 对应，按 API 归属放在 parser.js；
-// 这里再导出一份，方便 import { reporterWeek } from './rooms.js?v=2026-10-21T00%3A53%3A09' 的用法。
-export { reporterWeek } from './parser.js?v=2026-10-21T00%3A53%3A09';
+// 这里再导出一份，方便 import { reporterWeek } from './rooms.js?v=2026-10-21T00%3A58%3A05' 的用法。
+export { reporterWeek } from './parser.js?v=2026-10-21T00%3A58%3A05';

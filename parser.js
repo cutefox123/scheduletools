@@ -520,18 +520,15 @@ export function rowCampusFlags(cells) {
 }
 
 /**
- * 中班的最终归类：
- *  - 格子里自己写了院区（西3/中、东3/中）或“值中” → 以格子为准；
- *  - 裸“中”（1诊/中、5查/中、中//4）→ 看整行排班格：
- *      整行带“西”= 西中班，整行带“东”= 东中班，都没有 = 总院区中班（中班）。
- * “值中”永远单独一类，不受整行院区影响。
+ * 中班的最终归类，只看“单元格”本身：
+ *  - 单元格里出现“值中” → 值中班（优先级最高）；
+ *  - 单元格里出现“西”（如 西3/中）→ 西中班；
+ *  - 单元格里出现“东”（如 东3/中）→ 东中班；
+ *  - 其余裸“中”（1诊/中、5查/中、中//4）→ 总院区中班。
+ * 整周那一行里别处写了东/西，不影响这一格。
  */
-export function effectiveMid(cell, rowHasWest = false, rowHasEast = false) {
-  const k = midKey(cell);
-  if (k === '' || k !== '中') return k; // 格子明确写了中西/东/值等，直接采用
-  if (rowHasWest) return '西中';
-  if (rowHasEast) return '东中';
-  return '中';
+export function effectiveMid(cell, ignoredRowHasWest = false, ignoredRowHasEast = false) {
+  return midKey(cell);
 }
 
 /**
