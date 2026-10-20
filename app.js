@@ -1,8 +1,8 @@
 // 查班小助手 PWA —— 主逻辑
 // 解析全部在本地完成（js/xlsx.js、js/xls.js、js/parser.js、js/rooms.js），数据只存 localStorage。
 
-import { fetchWeather } from './weather.js?v=2026-10-20T13%3A46%3A51';
-import { buildTips } from './tips.js?v=2026-10-20T13%3A46%3A51';
+import { fetchWeather } from './weather.js?v=2026-10-20T13%3A51%3A52';
+import { buildTips } from './tips.js?v=2026-10-20T13%3A51%3A52';
 
 const K = {
   doctorRows: 'sa.doctorRows',
@@ -104,10 +104,10 @@ async function loadModules() {
       return false;
     }
   };
-  await load('xlsx', './xlsx.js?v=2026-10-20T13%3A46%3A51');
-  await load('xls', './xls.js?v=2026-10-20T13%3A46%3A51');
-  await load('parser', './parser.js?v=2026-10-20T13%3A46%3A51');
-  await load('rooms', './rooms.js?v=2026-10-20T13%3A46%3A51');
+  await load('xlsx', './xlsx.js?v=2026-10-20T13%3A51%3A52');
+  await load('xls', './xls.js?v=2026-10-20T13%3A51%3A52');
+  await load('parser', './parser.js?v=2026-10-20T13%3A51%3A52');
+  await load('rooms', './rooms.js?v=2026-10-20T13%3A51%3A52');
   if (!mod.parser) {
     toast('解析模块未就绪，页面仍可打开');
   }
@@ -763,6 +763,7 @@ function showRoomDetail(doctorRows, rep, room) {
   const detail = mod.rooms.roomDetail(doctorRows, rep, room.key);
   const listEl = $('roomList');
   if (!detail.ok) { toast(detail.error || '查不到'); return; }
+  const isMidRoom = detail.mid === true;
   listEl.innerHTML = '';
   const back = document.createElement('button');
   back.textContent = '‹ 返回诊室列表';
@@ -776,9 +777,15 @@ function showRoomDetail(doctorRows, rep, room) {
   for (const d of detail.days) {
     const div = document.createElement('div');
     div.style.cssText = 'padding:10px 6px;border-bottom:1px solid var(--border)';
-    div.innerHTML = `<b>${escapeHtml(d.weekLabel)}　${escapeHtml(d.dateLabel)}</b><br>`
-      + `<span class="day-line">上午：${detailHalf(d.am)}</span><br>`
-      + `<span class="day-line">下午：${detailHalf(d.pm)}</span>`;
+    if (isMidRoom) {
+      // 中班类诊室：中午这一班，不按上午/下午拆
+      div.innerHTML = `<b>${escapeHtml(d.weekLabel)}　${escapeHtml(d.dateLabel)}</b><br>`
+        + `<span class="day-line">${midLine(d.am, d.pm)}</span>`;
+    } else {
+      div.innerHTML = `<b>${escapeHtml(d.weekLabel)}　${escapeHtml(d.dateLabel)}</b><br>`
+        + `<span class="day-line">上午：${detailHalf(d.am)}</span><br>`
+        + `<span class="day-line">下午：${detailHalf(d.pm)}</span>`;
+    }
     listEl.appendChild(div);
   }
 }
@@ -791,6 +798,16 @@ function highlightMark(name) {
 
 function namesHtml(list) {
   return list.map(highlightMark).join('、');
+}
+
+// 中班类诊室：上午/下午合成一行
+function midLine(am, pm) {
+  const docs = [...new Set([...(am?.doctors || []), ...(pm?.doctors || [])].filter(Boolean))];
+  const reps = [...new Set([...(am?.reporters || []), ...(pm?.reporters || [])].filter(Boolean))];
+  if (!docs.length && !reps.length) return '—';
+  let s = docs.length ? namesHtml(docs) : '—';
+  if (reps.length) s += '　·　搭档：' + namesHtml(reps);
+  return s;
 }
 
 function detailHalf(half) {
@@ -810,5 +827,5 @@ function loadCachedWeek() {
   }
 }
 
-self.__APP_VERSION__ = '2026-10-20T13:46:51';
+self.__APP_VERSION__ = '2026-10-20T13:51:52';
 document.addEventListener('DOMContentLoaded', init);
