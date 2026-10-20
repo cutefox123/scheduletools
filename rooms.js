@@ -21,7 +21,7 @@ import {
   primaryKey,
   canonicalRoom,
   dayLabelsOf,
-} from './parser.js?v=2026-10-21T00%3A22%3A11';
+} from './parser.js?v=2026-10-21T00%3A29%3A01';
 
 // ---------------- 诊室目录 ----------------
 
@@ -97,10 +97,9 @@ function collectMidRooms(doctorMatrix, repResult) {
   const addForms = (cell) => {
     const t = cell == null ? '' : stripWs(cell);
     if (t === '') return;
-    for (const half of t.split('/')) {
-      const v = midKey(half);
-      if (v !== '' && !variants.includes(v)) variants.push(v);
-    }
+    // 整格判断：西3/中 → 西中，东3/中 → 东中，单写中 → 中
+    const v = midKey(t);
+    if (v !== '' && !variants.includes(v)) variants.push(v);
   };
   const h = findHeader(doctorMatrix);
   if (h.error != null) return [];
@@ -117,9 +116,10 @@ function collectMidRooms(doctorMatrix, repResult) {
 /** 中班人名后缀：东中/西中/值中 标出来，纯「中」不标。 */
 export function markMid(name, token) {
   const t = token == null ? '' : stripWs(token);
-  if (name == null || name === '' || t === '' || midKey(t) === '') return name;
-  if (t === '中') return name;
-  const suffix = '（' + t + '）';
+  const mid = midKey(t);
+  if (name == null || name === '' || mid === '') return name;
+  if (mid === '中') return name;
+  const suffix = '（' + mid + '）';
   return name.endsWith(suffix) ? name : name + suffix;
 }
 
@@ -248,5 +248,5 @@ export function roomDetail(doctorMatrix, repResult, key) {
 
 
 // 报告员一周排班与 Java 的 RoomDirectory.reporterWeek 对应，按 API 归属放在 parser.js；
-// 这里再导出一份，方便 import { reporterWeek } from './rooms.js?v=2026-10-21T00%3A22%3A11' 的用法。
-export { reporterWeek } from './parser.js?v=2026-10-21T00%3A22%3A11';
+// 这里再导出一份，方便 import { reporterWeek } from './rooms.js?v=2026-10-21T00%3A29%3A01' 的用法。
+export { reporterWeek } from './parser.js?v=2026-10-21T00%3A29%3A01';

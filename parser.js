@@ -487,11 +487,43 @@ export function midKey(half) {
   if (half == null) return '';
   const t = stripWs(half).split('中班').join('中');
   if (!t.includes('中')) return '';
-  let rest = t.split('中').join('');
-  for (const ch of ['东', '西', '南', '北', '总', '院']) rest = rest.split(ch).join('');
-  rest = rest.replace(/[/\\|\-—~．.、，,。\s]/g, '');
-  if (rest === '' || rest === '值') return t;
+  // 中班可能写在整格的一半（“西3/中”“东3/中”）：先找到含“中”的那一段，
+  // 再结合整格里的院区前缀判断。带西=西中，带东=东中，都不带=总院中。
+  for (const seg of t.split(/[/\\|\-—~．.、，,。]/)) {
+    if (!seg.includes('中')) continue;
+    let rest = seg.split('中').join('');
+    for (const ch of ['东', '西', '南', '北', '总', '院', '值']) rest = rest.split(ch).join('');
+    if (rest !== '') continue;
+    if (seg.includes('西')) return '西中';
+    if (seg.includes('东')) return '东中';
+    if (seg.includes('南')) return '南中';
+    if (seg.includes('北')) return '北中';
+    if (seg.includes('值')) return '值中';
+    if (t.includes('西')) return '西中';
+    if (t.includes('东')) return '东中';
+    return '中';
+  }
   return '';
+}
+
+function collectMidReporters(data, di, mid, out) {
+  for (const e of data.entries) {
+    if (di >= e.cells.length) continue;
+    const cell = e.cells[di];
+    if (mid !== midKey(cell)) continue;
+    const am = halfOf(cell, 0);
+    const pm = halfOf(cell, 1);
+    const place = mid === midKey(am) ? am : (mid === midKey(pm) ? pm : am);
+    const tagged = markRoom(e.name, place);
+    if (!out.includes(tagged)) out.push(tagged);
+  }
+}
+
+/** 中班配对键：中/东中/西中/南中/北中 都按“中”配对，值中单独一类。 */
+export function midPairKey(half) {
+  const k = midKey(half);
+  if (k === '') return '';
+  return k === '值中' ? k : '中';
 }
 
 /** 整格（可能带“/”）里是否有半天是中班。 */
@@ -974,15 +1006,11 @@ export function reportersFor(data, ymd, halfIdx, doctorToken) {
   if (di < 0) return out;
   const mid = midKey(doctorToken);
   if (mid !== '') {
-    for (const e of data.entries) {
-      if (di >= e.cells.length) continue;
-      const am = halfOf(e.cells[di], 0);
-      const pm = halfOf(e.cells[di], 1);
-      const place = mid === midKey(am) ? am : pm;
-      const tagged = markRoom(e.name, place);
-      if ((mid === midKey(am) || mid === midKey(pm)) && !out.includes(tagged)) {
-        out.push(tagged);
-      }
+    // 先精确匹配院区（东中/西中/中/值中）；西中/东中找不到时再退回裸“中”，
+    // 兼容报告员表里只写“中”的写法。值中不退回。
+    collectMidReporters(data, di, mid, out);
+    if (out.length === 0 && mid !== '中' && mid !== '值中') {
+      collectMidReporters(data, di, '中', out);
     }
     return out;
   }
@@ -1025,12 +1053,12 @@ export function pairLabel(data, raw, ymd) {
 
   const amMid = midKey(am);
   const pmMid = midKey(pm);
+  // 中班按整格判断：西3/中、东3/中 要分别归到西中、东中
+  const cellMid = midKey(t);
   // 中班单独算一类（上午/下午两表写法相反），其余按对应半天找位置
   const amN = (validHalf(am) && amMid === '') ? reportersFor(data, ymd, 0, am) : [];
   const pmN = (validHalf(pm) && pmMid === '') ? reportersFor(data, ymd, 1, pm) : [];
-  let midN = [];
-  if (amMid !== '') midN = reportersFor(data, ymd, 0, am);
-  else if (pmMid !== '') midN = reportersFor(data, ymd, 1, pm);
+  const midN = cellMid === '' ? [] : reportersFor(data, ymd, 0, cellMid);
 
   if (amN.length === 0 && pmN.length === 0 && midN.length === 0) return null;
   // 上午、下午是同一个人（整格一个诊室）→ 只写一次
@@ -1066,13 +1094,11 @@ function addPartner(half, doctor, doctorToken) {
 }
 
 /** 报告员这半天是中班、医生同一天也有同一个中班 → 是搭档（中班不分上午/下午槽位）。 */
-function addMidPartner(half, doctor, doctorCell) {
-  const repMid = midKey(half.place);
-  if (repMid === '') return;
-  const slash = doctorCell.indexOf('/');
-  const am = slash >= 0 ? doctorCell.substring(0, slash) : doctorCell;
-  const pm = slash >= 0 ? doctorCell.substring(slash + 1) : doctorCell;
-  if ((repMid === midKey(am) || repMid === midKey(pm)) && !half.partners.includes(doctor)) {
+function addMidPartner(half, doctor, doctorCell, repCell) {
+  if (midKey(half.place) === '') return;
+  const repMid = midKey(repCell);
+  if (repMid === '' || repMid !== midKey(doctorCell)) return;
+  if (!half.partners.includes(doctor)) {
     half.partners.push(doctor);
   }
 }
@@ -1139,8 +1165,8 @@ export function reporterWeek(doctorMatrix, repResult, name) {
       addPartner(out[i].am, doctor, am);
       addPartner(out[i].pm, doctor, pm);
       // 中班：两表写在不同半天（医生“4诊/中”、报告员“中//4诊”），按中班本身配对
-      addMidPartner(out[i].am, doctor, t);
-      addMidPartner(out[i].pm, doctor, t);
+      addMidPartner(out[i].am, doctor, t, entry.cells[i]);
+      addMidPartner(out[i].pm, doctor, t, entry.cells[i]);
     }
   }
 
