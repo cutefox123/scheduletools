@@ -521,8 +521,7 @@ function collectMidReporters(data, di, mid, out) {
 
 /** 整行带“西”时，裸“中”按西中处理。 */
 export function effectiveMid(cell, rowHasWest) {
-  const k = midKey(cell);
-  return k === '中' && rowHasWest ? '西中' : k;
+  return midKey(cell);
 }
 
 /** 中班配对键：中/东中/西中/南中/北中 都按“中”配对，值中单独一类。 */

@@ -22,7 +22,7 @@ import {
   primaryKey,
   canonicalRoom,
   dayLabelsOf,
-} from './parser.js?v=2026-10-21T00%3A36%3A54';
+} from './parser.js?v=2026-10-21T00%3A39%3A58';
 
 // ---------------- 诊室目录 ----------------
 
@@ -253,5 +253,5 @@ export function roomDetail(doctorMatrix, repResult, key) {
 
 
 // 报告员一周排班与 Java 的 RoomDirectory.reporterWeek 对应，按 API 归属放在 parser.js；
-// 这里再导出一份，方便 import { reporterWeek } from './rooms.js?v=2026-10-21T00%3A36%3A54' 的用法。
-export { reporterWeek } from './parser.js?v=2026-10-21T00%3A36%3A54';
+// 这里再导出一份，方便 import { reporterWeek } from './rooms.js?v=2026-10-21T00%3A39%3A58' 的用法。
+export { reporterWeek } from './parser.js?v=2026-10-21T00%3A39%3A58';
