@@ -1,14 +1,27 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<!-- build:2026-10-20T13:51:52 -->
+<!-- build:2026-10-20T20:08:31 -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
 <title>查班小助手</title>
 <meta name="theme-color" content="#4B6BF5">
+<script>
+  // 尽量在首屏绘制前定好深浅色，避免夜里打开先闪一下白屏。
+  (function () {
+    try {
+      var m = localStorage.getItem('sa.theme') || 'system';
+      if (m === 'dark' || (m === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+        document.documentElement.dataset.theme = 'dark';
+      } else if (m === 'light') {
+        document.documentElement.dataset.theme = 'light';
+      }
+    } catch (e) {}
+  })();
+</script>
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
-<meta name="description" content="导入排班表，看本周班次、搭档和天气，导出到系统日历提醒">
+<meta name="description" content="导入排班表，看本周班次、搭档和天气，分享整周班表，导出到系统日历提醒">
 <link rel="manifest" href="manifest.webmanifest">
 <!-- iOS 添加到主屏幕 -->
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -18,7 +31,7 @@
 <meta name="format-detection" content="telephone=no">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon-192.png" sizes="192x192">
-<link rel="stylesheet" href="styles.css?v=2026-10-20T13%3A51%3A52">
+<link rel="stylesheet" href="styles.css?v=2026-10-20T20%3A08%3A31">
 </head>
 <body>
 <div id="app">
@@ -51,6 +64,7 @@
 
     <div class="hero-actions">
       <button id="btnRooms" class="btn-ghost">诊室查询</button>
+      <button id="btnShare" class="btn-ghost">分享本周</button>
     </div>
 
     <p id="fileStatus" class="hero-file">医生表：尚未导入</p>
@@ -114,15 +128,23 @@
 <!-- 设置 -->
 <dialog id="dlgSettings">
   <h3>设置</h3>
+  <div class="set-row"><span>外观</span>
+    <select id="setTheme" aria-label="外观">
+      <option value="system">跟随系统</option>
+      <option value="light">浅色</option>
+      <option value="dark">深色</option>
+    </select>
+  </div>
+  <p class="hint" style="margin-top:8px">夜班看班可以选「深色」，也可以交给系统的定时深色模式；分享出去的图片仍是浅色。</p>
   <div class="set-row"><span>提醒分钟</span><b id="setLead">30</b></div>
   <div class="set-row"><span>医生表</span><b id="setDoctor">—</b></div>
   <div class="set-row"><span>报告员表</span><b id="setReporter">—</b></div>
   <div class="set-row"><span>版本</span><b id="setVersion">—</b></div>
-  <div class="dlg-actions">
+  <div class="dlg-actions wrap">
     <button id="btnGuide" class="btn-ghost solid">使用说明</button>
     <button id="btnSelfCheck" class="btn-ghost solid">自检</button>
     <button id="btnHardReload" class="btn-ghost solid">强制刷新</button>
-    <button id="btnClear" class="btn-ghost solid">清空本机数据</button>
+    <button id="btnClear" class="btn-ghost solid">清空数据</button>
   </div>
   <div class="dlg-actions">
     <button id="btnCloseSettings" class="btn-primary">关闭</button>
@@ -141,6 +163,6 @@
 
 <input id="filePicker" type="file" accept=".xlsx,.xls,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
 
-<script type="module" src="app.js?v=2026-10-20T13%3A51%3A52"></script>
+<script type="module" src="app.js?v=2026-10-20T20%3A08%3A31"></script>
 </body>
 </html>

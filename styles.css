@@ -1,6 +1,7 @@
 :root {
   --brand: #4B6BF5;
   --brand-2: #7A5AF8;
+  --brand-on-light: #4B6BF5;
   --page: #F5F7FC;
   --card: #FFFFFF;
   --border: #EDF0F7;
@@ -10,8 +11,57 @@
   --weather: #0E87C8;
   --tips-bg: #F4F7FF;
   --tips-text: #42506B;
+  --input: #F3F5FA;
+  --mark-bg: #FFF0E2;
+  --mark-fg: #C2410C;
+  --hero-grad: linear-gradient(135deg, #5B7CFA 0%, #5A68F4 55%, #825CF6 100%);
+  --hero-shadow: rgba(75, 107, 245, .28);
   --radius: 18px;
+  color-scheme: light;
   -webkit-text-size-adjust: 100%;
+}
+
+/* 深色：低亮度蓝灰底，夜里看不刺眼；文字不用纯白。 */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --brand: #7C96FF;
+    --brand-2: #A88BFF;
+    --page: #0D1220;
+    --card: #151C2B;
+    --border: #253047;
+    --text: #E7ECF7;
+    --sub: #9AA6BE;
+    --hint: #6D798F;
+    --weather: #63B8E8;
+    --tips-bg: #1A2233;
+    --tips-text: #C6D2E8;
+    --input: #1C2435;
+    --mark-bg: #32241A;
+    --mark-fg: #FFB27A;
+    --hero-grad: linear-gradient(135deg, #3E57D0 0%, #4653DC 55%, #6A46DC 100%);
+    --hero-shadow: rgba(0, 0, 0, .45);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --brand: #7C96FF;
+  --brand-2: #A88BFF;
+  --page: #0D1220;
+  --card: #151C2B;
+  --border: #253047;
+  --text: #E7ECF7;
+  --sub: #9AA6BE;
+  --hint: #6D798F;
+  --weather: #63B8E8;
+  --tips-bg: #1A2233;
+  --tips-text: #C6D2E8;
+  --input: #1C2435;
+  --mark-bg: #32241A;
+  --mark-fg: #FFB27A;
+  --hero-grad: linear-gradient(135deg, #3E57D0 0%, #4653DC 55%, #6A46DC 100%);
+  --hero-shadow: rgba(0, 0, 0, .45);
 }
 
 * { box-sizing: border-box; }
@@ -42,8 +92,8 @@ html, body {
   border-radius: 24px;
   padding: 18px 18px 16px;
   color: #fff;
-  background: linear-gradient(135deg, #5B7CFA 0%, #5A68F4 55%, #825CF6 100%);
-  box-shadow: 0 8px 24px rgba(75, 107, 245, .28);
+  background: var(--hero-grad);
+  box-shadow: 0 8px 24px var(--hero-shadow);
 }
 
 .hero-top {
@@ -128,7 +178,7 @@ html, body {
   border-radius: 14px;
   padding: 0 14px;
   font-size: 16px;  /* ≥16px 防止 iOS 聚焦缩放 */
-  color: var(--text);
+  color: #18213A;
   background: #fff;
 }
 
@@ -140,7 +190,7 @@ html, body {
   border: none;
   border-radius: 14px;
   background: #fff;
-  color: var(--brand);
+  color: var(--brand-on-light);
   font-size: 15px;
   font-weight: 700;
 }
@@ -165,7 +215,7 @@ html, body {
 
 .seg button.on {
   background: #fff;
-  color: var(--brand);
+  color: var(--brand-on-light);
   font-weight: 700;
 }
 
@@ -189,7 +239,7 @@ html, body {
 
 .btn-ghost.solid {
   background: #fff;
-  color: var(--brand);
+  color: var(--brand-on-light);
   border-color: #fff;
   font-weight: 700;
 }
@@ -241,7 +291,7 @@ html, body {
   text-align: center;
   border: none;
   border-radius: 10px;
-  background: #F3F5FA;
+  background: var(--input);
   font-size: 16px;
   font-weight: 700;
   color: var(--text);
@@ -249,7 +299,7 @@ html, body {
 
 .btn-primary {
   border: none;
-  background: var(--brand);
+  background: var(--brand-on-light);
   color: #fff;
 }
 
@@ -352,14 +402,14 @@ html, body {
 /* 日卡上的「（培训）/（听）」标记 */
 .badge-mark {
   margin-left: 6px;
-  background: #FFF0E2;
-  color: #C2410C;
+  background: var(--mark-bg);
+  color: var(--mark-fg);
   font-weight: 700;
 }
 
 /* 诊室明细里的人名标记 */
 .name-mark {
-  color: #C2410C;
+  color: var(--mark-fg);
   font-weight: 700;
 }
 
@@ -379,7 +429,7 @@ html, body {
 .build-line {
   margin-top: 4px !important;
   font-size: 10.5px !important;
-  color: #B9C0CF !important;
+  color: var(--hint) !important;
   font-variant-numeric: tabular-nums;
 }
 
@@ -396,7 +446,9 @@ dialog {
   border-radius: 22px;
   padding: 20px;
   width: min(92vw, 460px);
-  background: #fff;
+  max-height: 86vh;
+  overflow-y: auto;
+  background: var(--card);
   color: var(--text);
 }
 
@@ -412,6 +464,14 @@ dialog h3 { margin: 0 0 6px; font-size: 18px; }
   margin-top: 14px;
 }
 
+.dlg-actions.wrap {
+  flex-wrap: wrap;
+}
+
+.dlg-actions.wrap button {
+  flex: 1 1 calc(50% - 5px);
+}
+
 .dlg-actions button {
   flex: 1;
   border-radius: 14px;
@@ -422,11 +482,11 @@ dialog h3 { margin: 0 0 6px; font-size: 18px; }
 
 .dlg-actions .btn-ghost {
   border: 1px solid var(--border);
-  background: #F5F7FC;
+  background: var(--input);
   color: var(--brand);
 }
 
-.dlg-actions .btn-primary { background: var(--brand); color: #fff; }
+.dlg-actions .btn-primary { background: var(--brand-on-light); color: #fff; }
 
 .dlg-note {
   margin: 12px 0 0;
@@ -440,7 +500,7 @@ dialog input[type="search"] {
   height: 44px;
   border: none;
   border-radius: 12px;
-  background: #F3F5FA;
+  background: var(--input);
   padding: 0 14px;
   font-size: 16px;
   color: var(--text);
@@ -474,6 +534,16 @@ dialog input[type="search"] {
 }
 
 .set-row b { color: var(--text); font-weight: 600; word-break: break-all; text-align: right; }
+
+.set-row select {
+  background: var(--input);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 6px 8px;
+  font-size: 13px;
+  min-width: 104px;
+}
 
 /* 提示条 */
 .toast {
