@@ -7,6 +7,7 @@
 //   roomDetail(doctorMatrix, repResult, key) -> { ok, display, days: [...] }
 
 import {
+  midKey,
   roomMark,
   markRoom,
   markListen,
@@ -20,7 +21,7 @@ import {
   primaryKey,
   canonicalRoom,
   dayLabelsOf,
-} from './parser.js?v=2026-10-19T11%3A45%3A09';
+} from './parser.js?v=2026-10-20T13%3A41%3A00';
 
 // ---------------- 诊室目录 ----------------
 
@@ -78,9 +79,46 @@ function putRoom(map, token) {
  * 收集全部诊室。对应 RoomDirectory.buildRooms 的 JSON 形态：
  * [{ key, display, forms: [写法…] }]，顺序 = 首次出现顺序。
  */
+export const MID_ROOM_KEY = '中班';
+
+/** 表里有中班（中/东中/西中/值中）时返回「中班」诊室，没有返回 null。 */
+function collectMidRoom(doctorMatrix, repResult) {
+  const forms = [];
+  const addForms = (cell) => {
+    const t = cell == null ? '' : stripWs(cell);
+    if (t === '') return;
+    for (const half of t.split('/')) {
+      if (midKey(half) !== '' && !forms.includes(half)) forms.push(half);
+    }
+  };
+  const h = findHeader(doctorMatrix);
+  if (h.error != null) return null;
+  for (const row of doctorMatrix) {
+    if (doctorNameCol(row, h.firstDateCol) < 0) continue;
+    for (const dc of h.dateCols) addForms(dc.col < row.length ? row[dc.col] : '');
+  }
+  if (repResult != null && Array.isArray(repResult.entries)) {
+    for (const e of repResult.entries) for (const cell of e.cells) addForms(cell);
+  }
+  if (!forms.length) return null;
+  return { key: MID_ROOM_KEY, display: MID_ROOM_KEY, forms };
+}
+
+/** 中班人名后缀：东中/西中/值中 标出来，纯「中」不标。 */
+export function markMid(name, token) {
+  const t = token == null ? '' : stripWs(token);
+  if (name == null || name === '' || t === '' || midKey(t) === '') return name;
+  if (t === '中') return name;
+  const suffix = '（' + t + '）';
+  return name.endsWith(suffix) ? name : name + suffix;
+}
+
 export function buildRooms(doctorMatrix, repResult) {
   const { rooms } = collectRooms(doctorMatrix, repResult);
-  return rooms.map((r) => ({ key: r.key, display: r.display, forms: r.forms.slice() }));
+  const out = rooms.map((r) => ({ key: r.key, display: r.display, forms: r.forms.slice() }));
+  const mid = collectMidRoom(doctorMatrix, repResult);
+  if (mid) out.push(mid);
+  return out;
 }
 
 /** 按规范化键找诊室（如“2期5”“东6”“6”）。 */
@@ -118,6 +156,17 @@ export { searchRooms as search };
 
 // ---------------- 一周明细 ----------------
 
+/** 诊室匹配：中班诊室按 midKey 判断，其余按诊室主键。 */
+function addIfMatch(list, person, token, roomKey) {
+  if (roomKey === MID_ROOM_KEY) {
+    if (midKey(token) === '') return;
+    const taggedMid = markMid(person, token);
+    if (!list.includes(taggedMid)) list.push(taggedMid);
+    return;
+  }
+  addIfRoom(list, person, token, roomKey);
+}
+
 function addIfRoom(list, person, token, roomKey) {
   if (!isRoomToken(token)) return;
   if (primaryKey(token) !== roomKey) return;
@@ -149,8 +198,8 @@ function detail(doctorMatrix, repResult, room, h) {
       const slash = t.indexOf('/');
       const am = slash >= 0 ? t.substring(0, slash) : t;
       const pm = slash >= 0 ? t.substring(slash + 1) : t;
-      addIfRoom(out[i].am.doctors, doctor, am, room.key);
-      addIfRoom(out[i].pm.doctors, doctor, pm, room.key);
+      addIfMatch(out[i].am.doctors, doctor, am, room.key);
+      addIfMatch(out[i].pm.doctors, doctor, pm, room.key);
     }
   }
 
@@ -161,8 +210,8 @@ function detail(doctorMatrix, repResult, room, h) {
       for (let i = 0; i < n; i++) {
         const am = halfOf(e.cells[i], 0);
         const pm = halfOf(e.cells[i], 1);
-        addIfRoom(out[i].am.reporters, e.name, am, room.key);
-        addIfRoom(out[i].pm.reporters, e.name, pm, room.key);
+        addIfMatch(out[i].am.reporters, e.name, am, room.key);
+        addIfMatch(out[i].pm.reporters, e.name, pm, room.key);
       }
     }
   }
@@ -178,6 +227,9 @@ export function roomDetail(doctorMatrix, repResult, key) {
   if (h.error != null) {
     return { ok: false, display: '', error: h.error, days: [] };
   }
+  // 「中班」是虚拟诊室，collectRooms 里没有，这里补上
+  const mid = collectMidRoom(doctorMatrix, repResult);
+  if (mid) rooms.push(mid);
   const room = findRoom(rooms, key);
   if (room == null) {
     return { ok: false, display: '', error: '没找到诊室「' + key + '」', days: [] };
@@ -187,5 +239,5 @@ export function roomDetail(doctorMatrix, repResult, key) {
 
 
 // 报告员一周排班与 Java 的 RoomDirectory.reporterWeek 对应，按 API 归属放在 parser.js；
-// 这里再导出一份，方便 import { reporterWeek } from './rooms.js?v=2026-10-19T11%3A45%3A09' 的用法。
-export { reporterWeek } from './parser.js?v=2026-10-19T11%3A45%3A09';
+// 这里再导出一份，方便 import { reporterWeek } from './rooms.js?v=2026-10-20T13%3A41%3A00' 的用法。
+export { reporterWeek } from './parser.js?v=2026-10-20T13%3A41%3A00';
