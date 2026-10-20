@@ -1,8 +1,8 @@
 // 查班小助手 PWA —— 主逻辑
 // 解析全部在本地完成（js/xlsx.js、js/xls.js、js/parser.js、js/rooms.js），数据只存 localStorage。
 
-import { fetchWeather } from './weather.js?v=2026-10-20T21%3A11%3A49';
-import { buildTips } from './tips.js?v=2026-10-20T21%3A11%3A49';
+import { fetchWeather } from './weather.js?v=2026-10-20T21%3A23%3A43';
+import { buildTips } from './tips.js?v=2026-10-20T21%3A23%3A43';
 
 const K = {
   doctorRows: 'sa.doctorRows',
@@ -157,10 +157,10 @@ async function loadModules() {
       return false;
     }
   };
-  await load('xlsx', './xlsx.js?v=2026-10-20T21%3A11%3A49');
-  await load('xls', './xls.js?v=2026-10-20T21%3A11%3A49');
-  await load('parser', './parser.js?v=2026-10-20T21%3A11%3A49');
-  await load('rooms', './rooms.js?v=2026-10-20T21%3A11%3A49');
+  await load('xlsx', './xlsx.js?v=2026-10-20T21%3A23%3A43');
+  await load('xls', './xls.js?v=2026-10-20T21%3A23%3A43');
+  await load('parser', './parser.js?v=2026-10-20T21%3A23%3A43');
+  await load('rooms', './rooms.js?v=2026-10-20T21%3A23%3A43');
   if (!mod.parser) {
     toast('解析模块未就绪，页面仍可打开');
   }
@@ -1150,5 +1150,5 @@ function loadCachedWeek() {
   }
 }
 
-self.__APP_VERSION__ = '2026-10-20T21:11:49';
+self.__APP_VERSION__ = '2026-10-20T21:23:43';
 document.addEventListener('DOMContentLoaded', init);
