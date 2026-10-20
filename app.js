@@ -1,8 +1,8 @@
 // 查班小助手 PWA —— 主逻辑
 // 解析全部在本地完成（js/xlsx.js、js/xls.js、js/parser.js、js/rooms.js），数据只存 localStorage。
 
-import { fetchWeather } from './weather.js?v=2026-10-21T00%3A29%3A01';
-import { buildTips } from './tips.js?v=2026-10-21T00%3A29%3A01';
+import { fetchWeather } from './weather.js?v=2026-10-21T00%3A36%3A54';
+import { buildTips } from './tips.js?v=2026-10-21T00%3A36%3A54';
 
 const K = {
   doctorRows: 'sa.doctorRows',
@@ -157,10 +157,10 @@ async function loadModules() {
       return false;
     }
   };
-  await load('xlsx', './xlsx.js?v=2026-10-21T00%3A29%3A01');
-  await load('xls', './xls.js?v=2026-10-21T00%3A29%3A01');
-  await load('parser', './parser.js?v=2026-10-21T00%3A29%3A01');
-  await load('rooms', './rooms.js?v=2026-10-21T00%3A29%3A01');
+  await load('xlsx', './xlsx.js?v=2026-10-21T00%3A36%3A54');
+  await load('xls', './xls.js?v=2026-10-21T00%3A36%3A54');
+  await load('parser', './parser.js?v=2026-10-21T00%3A36%3A54');
+  await load('rooms', './rooms.js?v=2026-10-21T00%3A36%3A54');
   if (!mod.parser) {
     toast('解析模块未就绪，页面仍可打开');
   }
@@ -276,7 +276,7 @@ function renderList(days) {
       : '';
     let pair = null;
     if (d.type !== 'REST' && mod.parser?.pairLabel) {
-      try { pair = mod.parser.pairLabel(getReporterResult(), d.raw, d.ymd); } catch { pair = null; }
+      try { pair = mod.parser.pairLabel(getReporterResult(), d.raw, d.ymd, d.rowHasWest); } catch { pair = null; }
     }
 
     el.innerHTML = `
@@ -312,7 +312,7 @@ function copyDay(d) {
   let pair = '';
   try {
     if (mod.parser && mod.parser.pairLabel) {
-      pair = mod.parser.pairLabel(getReporterResult(), d.raw, d.ymd) || '';
+      pair = mod.parser.pairLabel(getReporterResult(), d.raw, d.ymd, d.rowHasWest) || '';
     }
   } catch (e) { pair = ''; }
   if (pair) lines.push(pair);
@@ -571,7 +571,7 @@ function posterPair(d) {
   if (!d || d.type === 'REST') return '';
   try {
     return (mod.parser && mod.parser.pairLabel)
-      ? (mod.parser.pairLabel(getReporterResult(), d.raw, d.ymd) || '')
+      ? (mod.parser.pairLabel(getReporterResult(), d.raw, d.ymd, d.rowHasWest) || '')
       : '';
   } catch (e) {
     return '';
@@ -1150,5 +1150,5 @@ function loadCachedWeek() {
   }
 }
 
-self.__APP_VERSION__ = '2026-10-21T00:29:01';
+self.__APP_VERSION__ = '2026-10-21T00:36:54';
 document.addEventListener('DOMContentLoaded', init);

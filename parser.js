@@ -519,6 +519,12 @@ function collectMidReporters(data, di, mid, out) {
   }
 }
 
+/** 整行带“西”时，裸“中”按西中处理。 */
+export function effectiveMid(cell, rowHasWest) {
+  const k = midKey(cell);
+  return k === '中' && rowHasWest ? '西中' : k;
+}
+
 /** 中班配对键：中/东中/西中/南中/北中 都按“中”配对，值中单独一类。 */
 export function midPairKey(half) {
   const k = midKey(half);
@@ -690,6 +696,7 @@ function makeDay() {
     dateLabel: '',
     raw: '',
     type: 'REST',
+    rowHasWest: false,
     workInfo: '',
     startTime: null,
     preTime: null,
@@ -765,6 +772,7 @@ export function parseDoctor(matrix, name, leadMinutes) {
 
   // 6. 严格按日期表头的列取排班内容（D列休息天数 1.5 等自然被跳过）。
   const limit = Math.min(h.dateCols.length, 7);
+  const rowHasWest = row.some((c) => String(c).includes('西'));
   for (let i = 0; i < limit; i++) {
     const dc = h.dateCols[i];
     const date = dates[i];
@@ -780,6 +788,7 @@ export function parseDoctor(matrix, name, leadMinutes) {
     }
     const cell = dc.col < row.length ? jtrim(row[dc.col]) : '';
     fillShift(d, cell, leadMinutes == null ? 0 : leadMinutes);
+    d.rowHasWest = rowHasWest;
     result.days.push(d);
   }
   const first = dates.length === 0 ? null : dates[0];
@@ -1043,7 +1052,7 @@ function validHalf(h) {
  *  - 有中班 → 单独标“（中班）”
  *  - 没有配到 → null（隐藏该行）
  */
-export function pairLabel(data, raw, ymd) {
+export function pairLabel(data, raw, ymd, rowHasWest = false) {
   if (data == null || raw == null || jtrim(raw) === '' || ymd == null) return null;
   const t = stripWs(raw);
   if (t === '') return null;
@@ -1054,7 +1063,7 @@ export function pairLabel(data, raw, ymd) {
   const amMid = midKey(am);
   const pmMid = midKey(pm);
   // 中班按整格判断：西3/中、东3/中 要分别归到西中、东中
-  const cellMid = midKey(t);
+  const cellMid = effectiveMid(t, rowHasWest);
   // 中班单独算一类（上午/下午两表写法相反），其余按对应半天找位置
   const amN = (validHalf(am) && amMid === '') ? reportersFor(data, ymd, 0, am) : [];
   const pmN = (validHalf(pm) && pmMid === '') ? reportersFor(data, ymd, 1, pm) : [];
@@ -1094,10 +1103,11 @@ function addPartner(half, doctor, doctorToken) {
 }
 
 /** 报告员这半天是中班、医生同一天也有同一个中班 → 是搭档（中班不分上午/下午槽位）。 */
-function addMidPartner(half, doctor, doctorCell, repCell) {
+function addMidPartner(half, doctor, doctorCell, repCell, doctorRowWest, repRowWest) {
   if (midKey(half.place) === '') return;
-  const repMid = midKey(repCell);
-  if (repMid === '' || repMid !== midKey(doctorCell)) return;
+  const repMid = effectiveMid(repCell, repRowWest);
+  const docMid = effectiveMid(doctorCell, doctorRowWest);
+  if (repMid === '' || repMid !== docMid) return;
   if (!half.partners.includes(doctor)) {
     half.partners.push(doctor);
   }
@@ -1149,10 +1159,13 @@ export function reporterWeek(doctorMatrix, repResult, name) {
     }
   }
 
+  const repRowWest = Array.isArray(entry.cells)
+    && entry.cells.some((c) => String(c).includes('西'));
   for (const row of doctorMatrix) {
     const nameCol = doctorNameCol(row, h.firstDateCol);
     if (nameCol < 0) continue;
     const doctor = jtrim(row[nameCol]);
+    const doctorRowWest = row.some((c) => String(c).includes('西'));
     const n = Math.min(h.dateCols.length, out.length);
     for (let i = 0; i < n; i++) {
       const dc = h.dateCols[i];
@@ -1165,8 +1178,8 @@ export function reporterWeek(doctorMatrix, repResult, name) {
       addPartner(out[i].am, doctor, am);
       addPartner(out[i].pm, doctor, pm);
       // 中班：两表写在不同半天（医生“4诊/中”、报告员“中//4诊”），按中班本身配对
-      addMidPartner(out[i].am, doctor, t, entry.cells[i]);
-      addMidPartner(out[i].pm, doctor, t, entry.cells[i]);
+      addMidPartner(out[i].am, doctor, t, entry.cells[i], doctorRowWest, repRowWest);
+      addMidPartner(out[i].pm, doctor, t, entry.cells[i], doctorRowWest, repRowWest);
     }
   }
 

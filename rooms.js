@@ -8,6 +8,7 @@
 
 import {
   midKey,
+  effectiveMid,
   roomMark,
   markRoom,
   markListen,
@@ -21,7 +22,7 @@ import {
   primaryKey,
   canonicalRoom,
   dayLabelsOf,
-} from './parser.js?v=2026-10-21T00%3A29%3A01';
+} from './parser.js?v=2026-10-21T00%3A36%3A54';
 
 // ---------------- 诊室目录 ----------------
 
@@ -94,21 +95,25 @@ export function midVariantOf(roomKey) {
 /** 表里出现的中班写法，各生成一个诊室（按位置查询，不做归类）。 */
 function collectMidRooms(doctorMatrix, repResult) {
   const variants = [];
-  const addForms = (cell) => {
+  const addForms = (cell, rowHasWest) => {
     const t = cell == null ? '' : stripWs(cell);
     if (t === '') return;
-    // 整格判断：西3/中 → 西中，东3/中 → 东中，单写中 → 中
-    const v = midKey(t);
+    // 整格：西3/中→西中、东3/中→东中；整行带“西”时裸“中”也归西中
+    const v = effectiveMid(t, rowHasWest);
     if (v !== '' && !variants.includes(v)) variants.push(v);
   };
   const h = findHeader(doctorMatrix);
   if (h.error != null) return [];
   for (const row of doctorMatrix) {
     if (doctorNameCol(row, h.firstDateCol) < 0) continue;
-    for (const dc of h.dateCols) addForms(dc.col < row.length ? row[dc.col] : '');
+    const rowHasWest = row.some((c) => String(c).includes('西'));
+    for (const dc of h.dateCols) addForms(dc.col < row.length ? row[dc.col] : '', rowHasWest);
   }
   if (repResult != null && Array.isArray(repResult.entries)) {
-    for (const e of repResult.entries) for (const cell of e.cells) addForms(cell);
+    for (const e of repResult.entries) {
+      const rowHasWest = Array.isArray(e.cells) && e.cells.some((c) => String(c).includes('西'));
+      for (const cell of e.cells) addForms(cell, rowHasWest);
+    }
   }
   return variants.map((v) => ({ key: midRoomKey(v), display: midRoomKey(v), forms: [v] }));
 }
@@ -248,5 +253,5 @@ export function roomDetail(doctorMatrix, repResult, key) {
 
 
 // 报告员一周排班与 Java 的 RoomDirectory.reporterWeek 对应，按 API 归属放在 parser.js；
-// 这里再导出一份，方便 import { reporterWeek } from './rooms.js?v=2026-10-21T00%3A29%3A01' 的用法。
-export { reporterWeek } from './parser.js?v=2026-10-21T00%3A29%3A01';
+// 这里再导出一份，方便 import { reporterWeek } from './rooms.js?v=2026-10-21T00%3A36%3A54' 的用法。
+export { reporterWeek } from './parser.js?v=2026-10-21T00%3A36%3A54';
