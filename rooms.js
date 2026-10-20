@@ -23,7 +23,7 @@ import {
   primaryKey,
   canonicalRoom,
   dayLabelsOf,
-} from './parser.js?v=2026-10-21T00%3A51%3A23';
+} from './parser.js?v=2026-10-21T00%3A53%3A09';
 
 // ---------------- 诊室目录 ----------------
 
@@ -301,10 +301,16 @@ export function roomDetail(doctorMatrix, repResult, key) {
   if (room == null) {
     return { ok: false, display: '', error: '没找到诊室「' + key + '」', days: [] };
   }
-  return { ok: true, display: room.display, days: detail(doctorMatrix, repResult, room, h) };
+  const isMid = midVariantOf(room.key) !== null;
+  return {
+    ok: true,
+    display: room.display,
+    mid: isMid,
+    days: detail(doctorMatrix, repResult, room, h),
+  };
 }
 
 
 // 报告员一周排班与 Java 的 RoomDirectory.reporterWeek 对应，按 API 归属放在 parser.js；
-// 这里再导出一份，方便 import { reporterWeek } from './rooms.js?v=2026-10-21T00%3A51%3A23' 的用法。
-export { reporterWeek } from './parser.js?v=2026-10-21T00%3A51%3A23';
+// 这里再导出一份，方便 import { reporterWeek } from './rooms.js?v=2026-10-21T00%3A53%3A09' 的用法。
+export { reporterWeek } from './parser.js?v=2026-10-21T00%3A53%3A09';
