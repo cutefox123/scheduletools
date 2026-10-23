@@ -1,19 +1,19 @@
 // 查班小助手 · Service Worker
 // 策略：HTML/导航 走网络优先（保证每次打开都是最新的），静态资源走缓存优先（离线可看）。
 // 缓存版本必须随发布递增，否则用户会一直吃旧缓存。
-const VERSION = 'sw-2026-10-23T12:56:47';
+const VERSION = 'sw-2026-10-23T12:58:17';
 const SHELL = [
   './',
   './index.html',
   './styles.css',
   './manifest.webmanifest',
-  './app.js?v=2026-10-23T12%3A56%3A47',
-  './weather.js?v=2026-10-23T12%3A56%3A47',
-  './xlsx.js?v=2026-10-23T12%3A56%3A47',
-  './xls.js?v=2026-10-23T12%3A56%3A47',
-  './parser.js?v=2026-10-23T12%3A56%3A47',
-  './rooms.js?v=2026-10-23T12%3A56%3A47',
-  './tips.js?v=2026-10-23T12%3A56%3A47',
+  './app.js?v=2026-10-23T12%3A58%3A17',
+  './weather.js?v=2026-10-23T12%3A58%3A17',
+  './xlsx.js?v=2026-10-23T12%3A58%3A17',
+  './xls.js?v=2026-10-23T12%3A58%3A17',
+  './parser.js?v=2026-10-23T12%3A58%3A17',
+  './rooms.js?v=2026-10-23T12%3A58%3A17',
+  './tips.js?v=2026-10-23T12%3A58%3A17',
   './icon-180.png',
   './icon-192.png',
   './icon-512.png',

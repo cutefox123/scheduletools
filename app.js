@@ -1,8 +1,8 @@
 // 查班小助手 PWA —— 主逻辑
 // 解析全部在本地完成（js/xlsx.js、js/xls.js、js/parser.js、js/rooms.js），数据只存 localStorage。
 
-import { fetchWeather } from './weather.js?v=2026-10-23T12%3A56%3A47';
-import { buildTips } from './tips.js?v=2026-10-23T12%3A56%3A47';
+import { fetchWeather } from './weather.js?v=2026-10-23T12%3A58%3A17';
+import { buildTips } from './tips.js?v=2026-10-23T12%3A58%3A17';
 
 const K = {
   doctorRows: 'sa.doctorRows',
@@ -176,10 +176,10 @@ async function loadModules() {
       return false;
     }
   };
-  await load('xlsx', './xlsx.js?v=2026-10-23T12%3A56%3A47');
-  await load('xls', './xls.js?v=2026-10-23T12%3A56%3A47');
-  await load('parser', './parser.js?v=2026-10-23T12%3A56%3A47');
-  await load('rooms', './rooms.js?v=2026-10-23T12%3A56%3A47');
+  await load('xlsx', './xlsx.js?v=2026-10-23T12%3A58%3A17');
+  await load('xls', './xls.js?v=2026-10-23T12%3A58%3A17');
+  await load('parser', './parser.js?v=2026-10-23T12%3A58%3A17');
+  await load('rooms', './rooms.js?v=2026-10-23T12%3A58%3A17');
   if (!mod.parser) {
     toast('解析模块未就绪，页面仍可打开');
   }
@@ -565,12 +565,17 @@ function refreshFileStatus() {
 }
 
 function setKind(kind) {
+  const changed = state.kind !== kind;
   state.kind = kind;
   store.set(K.kind, kind);
   document.querySelectorAll('#seg button').forEach((b) => {
     b.classList.toggle('on', b.dataset.kind === kind);
   });
   $('nameInput').placeholder = kind === 'reporter' ? '报告员姓名' : '医生姓名';
+  // 和安卓 3.14 一样：切换医生/报告员时清空上一种查询的姓名。
+  if (changed) {
+    $('nameInput').value = '';
+  }
   // 报告员模式下恢复输入框（可能被“报告员一周”复用）
   $('personSearch').style.display = '';
   $('btnShareReporter').style.display = 'none';
@@ -937,6 +942,10 @@ async function shareCanvas(canvas, text, filename) {
 }
 
 async function shareWeekImage() {
+  if (state.kind === 'reporter') {
+    toast('报告员的排班请先查询，在结果弹窗里点「分享」');
+    return;
+  }
   if (!state.days.length) {
     toast('先导入排班表');
     return;
@@ -1379,5 +1388,5 @@ function loadCachedWeek() {
 }
 
 self.__APP_VERSION__ = APP_VERSION;
-self.__APP_BUILD__ = '2026-10-23T12:56:47';
+self.__APP_BUILD__ = '2026-10-23T12:58:17';
 document.addEventListener('DOMContentLoaded', init);
