@@ -80,8 +80,8 @@ html, body {
 
 #app {
   padding:
-    calc(12px + env(safe-area-inset-top))
-    14px
+    0
+    0
     calc(28px + env(safe-area-inset-bottom));
   max-width: 560px;
   margin: 0 auto;
@@ -89,8 +89,11 @@ html, body {
 
 /* ---------- 顶部渐变卡 ---------- */
 .hero {
-  border-radius: 24px;
-  padding: 18px 18px 16px;
+  border-radius: 0 0 26px 26px;
+  padding:
+    calc(10px + env(safe-area-inset-top))
+    16px
+    14px;
   color: #fff;
   background: var(--hero-grad);
   box-shadow: 0 8px 24px var(--hero-shadow);
@@ -100,74 +103,59 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
 }
 
 .hero h1 {
   margin: 0;
-  font-size: 25px;
+  font-size: 24px;
   font-weight: 700;
   letter-spacing: .3px;
 }
 
+.hero-icons {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
 .icon-btn {
+  position: relative;
+  display: grid;
+  place-items: center;
   border: none;
-  background: rgba(255, 255, 255, .18);
+  background: rgba(255, 255, 255, .16);
   color: #fff;
   width: 36px;
   height: 36px;
   border-radius: 12px;
-  font-size: 17px;
-  line-height: 1;
+  padding: 0;
 }
 
-.hero-sub {
-  margin: 6px 0 14px;
-  font-size: 12.5px;
-  color: #D4DDFF;
+.icon-btn:active { background: rgba(255, 255, 255, .28); }
+
+.icon-btn svg {
+  width: 19px;
+  height: 19px;
+  display: block;
 }
 
-.hero-sub-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.hero-sub-row .hero-sub {
-  flex: 1;
-  min-width: 0;
-  margin: 6px 0 14px;
-}
-
-/* 首页「刷新」按钮：常驻但与副标题同排，有新版时变醒目 */
-.hero-refresh {
-  flex: 0 0 auto;
-  margin-bottom: 8px;
-  padding: 5px 12px;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, .45);
-  background: rgba(255, 255, 255, .16);
-  color: #fff;
-  font-size: 12px;
-  line-height: 1.2;
-  white-space: nowrap;
-}
-
-.hero-refresh.has-update {
-  border-color: #FFE08A;
+.icon-btn.has-update::after {
+  content: '';
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
   background: #FFB020;
-  color: #4A2C00;
-  font-weight: 700;
-  animation: pulse 1.6s ease-in-out infinite;
-}
-
-@keyframes pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 176, 32, .55); }
-  50% { box-shadow: 0 0 0 7px rgba(255, 176, 32, 0); }
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, .55);
 }
 
 .search-row {
   display: flex;
   gap: 10px;
+  margin-top: 12px;
 }
 
 .search-row input {
@@ -195,13 +183,20 @@ html, body {
   font-weight: 700;
 }
 
+.hero-tools {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  margin-top: 10px;
+}
+
 .seg {
   display: inline-flex;
-  margin-top: 10px;
   padding: 3px;
   border-radius: 12px;
   background: rgba(255, 255, 255, .16);
   border: 1px solid rgba(255, 255, 255, .22);
+  flex: 0 0 auto;
 }
 
 .seg button {
@@ -219,10 +214,12 @@ html, body {
   font-weight: 700;
 }
 
-.hero-actions {
-  display: flex;
-  gap: 10px;
-  margin-top: 12px;
+.hero-import {
+  flex: 1;
+  min-height: 42px;
+  margin: 0;
+  padding: 8px 10px;
+  font-size: 13.5px;
 }
 
 .btn-ghost, .btn-primary {
@@ -318,14 +315,17 @@ html, body {
 }
 
 /* ---------- 一周列表 ---------- */
-.week { margin-top: 6px; }
+.week {
+  margin-top: 12px;
+  padding: 0 14px;
+}
 
 .day {
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: 20px;
-  padding: 14px 16px;
-  margin-top: 12px;
+  border-radius: 18px;
+  padding: 13px;
+  margin-top: 10px;
 }
 
 .day-head {
@@ -359,7 +359,7 @@ html, body {
 
 .day-raw {
   margin: 12px 0 0;
-  font-size: 16px;
+  font-size: 15.5px;
   font-weight: 700;
   word-break: break-all;
 }
@@ -399,33 +399,26 @@ html, body {
   color: var(--text);
 }
 
-/* 日卡上的「（培训）/（听）」标记 */
-.badge-mark {
-  margin-left: 6px;
-  background: var(--mark-bg);
-  color: var(--mark-fg);
-  font-weight: 700;
-}
-
 /* 诊室明细里的人名标记 */
 .name-mark {
   color: var(--mark-fg);
   font-weight: 700;
 }
 
-.today-flag {
-  font-size: 11px;
-  color: var(--brand);
-  margin-left: 4px;
-}
-
 /* ---------- 空状态 / 底部 ---------- */
-.empty { text-align: left; }
+.empty {
+  text-align: left;
+  margin-left: 14px;
+  margin-right: 14px;
+}
 .empty h2 { margin: 2px 0 8px; font-size: 17px; }
 .empty p { margin: 0 0 14px; font-size: 12.5px; line-height: 1.7; color: var(--sub); }
 .empty .btn-primary { width: 100%; }
 
-.foot { margin-top: 18px; }
+.foot {
+  margin-top: 18px;
+  padding: 0 14px;
+}
 .build-line {
   margin-top: 4px !important;
   font-size: 10.5px !important;
@@ -534,6 +527,86 @@ dialog input[type="search"] {
 }
 
 .set-row b { color: var(--text); font-weight: 600; word-break: break-all; text-align: right; }
+
+.set-section {
+  margin-top: 14px;
+}
+
+.set-title {
+  margin-bottom: 8px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.set-section .hint { margin-top: 8px; }
+
+.set-section .dlg-actions { margin-top: 10px; }
+
+.seg-theme {
+  display: flex;
+  padding: 3px;
+  border-radius: 14px;
+  background: var(--input);
+  border: 1px solid var(--border);
+}
+
+.seg-theme button {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: var(--sub);
+  font-size: 13px;
+  padding: 9px 4px;
+  border-radius: 11px;
+}
+
+.seg-theme button.on {
+  background: var(--brand-on-light);
+  color: #fff;
+  font-weight: 700;
+}
+
+/* 手机上点按不要出现桌面浏览器的黑色焦点框；键盘操作仍保留焦点提示。 */
+.person-list:focus,
+.dlg-actions button:focus,
+.seg-theme button:focus,
+.icon-btn:focus {
+  outline: none;
+}
+
+.dlg-actions button:focus-visible,
+.seg-theme button:focus-visible,
+.icon-btn:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+/* 使用引导 */
+.guide-list {
+  max-height: 54vh;
+  overflow-y: auto;
+  margin-top: 4px;
+}
+
+.guide-step {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.guide-step b {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.guide-step p {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--sub);
+}
 
 .set-row-link {
   cursor: pointer;

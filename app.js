@@ -1,8 +1,8 @@
 // 查班小助手 PWA —— 主逻辑
 // 解析全部在本地完成（js/xlsx.js、js/xls.js、js/parser.js、js/rooms.js），数据只存 localStorage。
 
-import { fetchWeather } from './weather.js?v=2026-10-23T12%3A40%3A11';
-import { buildTips } from './tips.js?v=2026-10-23T12%3A40%3A11';
+import { fetchWeather } from './weather.js?v=2026-10-23T12%3A56%3A47';
+import { buildTips } from './tips.js?v=2026-10-23T12%3A56%3A47';
 
 const K = {
   doctorRows: 'sa.doctorRows',
@@ -70,6 +70,7 @@ const store = {
 
 let mod = {};          // 动态加载的解析模块
 let repCache = null;   // 报告员表解析结果缓存（导入时失效）
+let reporterShare = null; // 报告员周视图当前分享的数据
 
 function getReporterResult() {
   if (repCache !== null) return repCache;
@@ -117,6 +118,9 @@ function applyTheme(mode, persist = true) {
   if (persist) {
     store.set(K.theme, next);
   }
+  document.querySelectorAll('#setThemeSeg button').forEach((b) => {
+    b.classList.toggle('on', b.dataset.theme === next);
+  });
   const dark = next === 'dark'
     || (next === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
   const meta = document.querySelector('meta[name="theme-color"]');
@@ -172,10 +176,10 @@ async function loadModules() {
       return false;
     }
   };
-  await load('xlsx', './xlsx.js?v=2026-10-23T12%3A40%3A11');
-  await load('xls', './xls.js?v=2026-10-23T12%3A40%3A11');
-  await load('parser', './parser.js?v=2026-10-23T12%3A40%3A11');
-  await load('rooms', './rooms.js?v=2026-10-23T12%3A40%3A11');
+  await load('xlsx', './xlsx.js?v=2026-10-23T12%3A56%3A47');
+  await load('xls', './xls.js?v=2026-10-23T12%3A56%3A47');
+  await load('parser', './parser.js?v=2026-10-23T12%3A56%3A47');
+  await load('rooms', './rooms.js?v=2026-10-23T12%3A56%3A47');
   if (!mod.parser) {
     toast('解析模块未就绪，页面仍可打开');
   }
@@ -284,11 +288,7 @@ function renderList(days) {
     const wObj = (wRaw && typeof wRaw === 'object') ? wRaw : null;
     const weatherText = wObj ? wObj.text : (typeof wRaw === 'string' ? wRaw : '');
     const past = d.ymd && d.ymd < today;
-    const isToday = d.ymd === today;
     const tips = buildTips(d, wObj);
-    const mark = (mod.parser && mod.parser.roomMark)
-      ? (mod.parser.roomMark(d.raw) || mod.parser.roomMark((d.raw || '').split('/')[0]))
-      : '';
     let pair = null;
     if (d.type !== 'REST' && mod.parser?.pairLabel) {
       try { pair = mod.parser.pairLabel(getReporterResult(), d.raw, d.ymd, d.rowHasWest, d.rowHasEast); } catch { pair = null; }
@@ -301,11 +301,9 @@ function renderList(days) {
           <span class="d">${d.ymd ? Number(d.ymd.slice(5, 7)) + '.' + Number(d.ymd.slice(8, 10)) : ''}</span>
         </div>
         <span class="badge" style="background:${style.bg};color:${style.fg}">${style.label}</span>
-        ${mark ? `<span class="badge badge-mark">（${escapeHtml(mark)}）</span>` : ''}
       </div>
       <p class="day-raw">${escapeHtml(d.type === 'REST' && (!d.raw || d.raw === '休' || d.raw === '/') ? '休息' : (d.raw || '（单元格为空）'))}</p>
       ${d.workInfo ? `<p class="day-line">${escapeHtml(d.workInfo)}</p>` : ''}
-      ${d.startTime ? `<p class="day-line">上班 ${d.startTime}${d.preTime ? ` · 提醒 ${d.preTime}` : ''}${isToday ? '<span class="today-flag">今天</span>' : ''}</p>` : ''}
       ${pair ? `<p class="day-line">${escapeHtml(pair)}</p>` : ''}
       <p class="day-weather">☁️ ${escapeHtml(weatherText || (past ? '已过' : (state.weatherAt ? '暂无预报' : '天气加载中…')))}</p>
       ${tips ? `<div class="day-tips">${escapeHtml(tips)}</div>` : ''}
@@ -379,17 +377,17 @@ function escapeHtml(s) {
 
 // ---------- 天气 ----------
 let weatherBusy = false;
-async function ensureWeather(days) {
+async function ensureWeather(days, force = false) {
   if (weatherBusy) return;
   const today = todayYmd();
   const need = days
     .filter((d) => d.ymd && d.ymd >= today && !state.weather[d.ymd])
     .map((d) => d.ymd);
-  const stale = Date.now() - state.weatherAt > 6 * 3600 * 1000;
+  const stale = force || Date.now() - state.weatherAt > 6 * 3600 * 1000;
   if (!need.length && !stale) return;
   weatherBusy = true;
   try {
-    const ymds = need.length ? need : days.map((d) => d.ymd).filter(Boolean);
+    const ymds = (force || !need.length) ? days.map((d) => d.ymd).filter(Boolean) : need;
     const got = await fetchWeather(ymds);
     Object.assign(state.weather, got);
     state.weatherAt = Date.now();
@@ -403,9 +401,22 @@ async function ensureWeather(days) {
   }
 }
 
+/** 顶部刷新：重新读排班 + 强制重拉天气（对齐安卓下拉刷新）。 */
+async function refreshAll() {
+  await renderWeek({ keepName: true });
+  if (!state.days.length) {
+    toast('先导入排班表');
+    return;
+  }
+  await ensureWeather(state.days, true);
+  toast('已刷新');
+}
+
 // ---------- 查询 / 换人 ----------
 async function pickPerson(names, onPick, title) {
   const dlg = $('dlgPerson');
+  reporterShare = null;
+  $('btnShareReporter').style.display = 'none';
   $('personTitle').textContent = title || '查谁的班';
   $('personSearch').value = '';
   $('personSearch').style.display = '';
@@ -457,8 +468,10 @@ async function queryReporter(name) {
 
 function showReporterWeek(name, days) {
   const dlg = $('dlgPerson');
+  reporterShare = { name, days: days || [] };
   $('personTitle').textContent = name + ' · 本周';
   $('personSearch').style.display = 'none';
+  $('btnShareReporter').style.display = (days && days.length) ? '' : 'none';
   const listEl = $('personList');
   listEl.innerHTML = '';
   for (const d of days) {
@@ -472,10 +485,13 @@ function showReporterWeek(name, days) {
   dlg.showModal();
 }
 
-function placeText(half) {
+function placeText(half, withPartners = true) {
   if (!half || !half.place || half.place === '休') return '休息';
+  const mid = { '中': '中班', '东中': '东院中班', '西中': '西院中班', '值中': '值班中班' }[half.place];
+  const place = mid || half.place;
+  if (!withPartners) return place;
   const partners = (half.partners || []).join('、');
-  return half.place + (partners ? `　·　搭档：${partners}` : '');
+  return place + (partners ? `　·　搭档：${partners}` : '');
 }
 
 // ---------- 导出到系统日历 ----------
@@ -544,17 +560,8 @@ async function exportCalendar() {
 function refreshFileStatus() {
   const doc = store.get(K.doctorFile, '');
   const rep = store.get(K.reporterFile, '');
-  $('fileStatus').textContent = doc ? `医生表：${doc}` : '医生表：尚未导入';
-  let repText = rep ? `报告员表：${rep}` : '报告员表：尚未导入';
-  const repRows = store.json(K.reporterRows, null);
-  if (rep && repRows && mod.parser?.parseReporter) {
-    const r = mod.parser.parseReporter(repRows);
-    if (r.ok) repText += `（${r.entries.length} 人）`;
-  }
-  $('fileStatusRep').textContent = repText;
   $('setDoctor').textContent = doc || '—';
   $('setReporter').textContent = rep || '—';
-  $('setLead').textContent = store.get(K.lead, '30');
 }
 
 function setKind(kind) {
@@ -566,6 +573,7 @@ function setKind(kind) {
   $('nameInput').placeholder = kind === 'reporter' ? '报告员姓名' : '医生姓名';
   // 报告员模式下恢复输入框（可能被“报告员一周”复用）
   $('personSearch').style.display = '';
+  $('btnShareReporter').style.display = 'none';
 }
 
 // ---------- 整周分享成一张图 ----------
@@ -778,6 +786,118 @@ function buildWeekPoster() {
   return canvas;
 }
 
+/** 报告员海报里的一行位置：中/东中/西中/值中 用中文全称，休息统一写“休息”。 */
+function reporterHalfText(half) {
+  if (!half || !half.place || half.place === '休') return '休息';
+  const mid = { '中': '中班', '东中': '东院中班', '西中': '西院中班', '值中': '值班中班' }[half.place];
+  const place = mid || half.place;
+  const partners = (half.partners || []).join('、');
+  return place + (partners ? `　·　搭档：${partners}` : '');
+}
+
+/** 报告员一周位置海报：对齐安卓 3.14 的「分享报告员排班」。 */
+function buildReporterPoster(name, days) {
+  const W = 540;
+  const headerH = 170;
+  const rowH = 132;
+  const footerH = 70;
+  const H = headerH + days.length * rowH + footerH;
+  const dpr = 2;
+  const canvas = document.createElement('canvas');
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  ctx.textBaseline = 'alphabetic';
+
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillRect(0, 0, W, H);
+
+  const grad = ctx.createLinearGradient(0, 0, W, headerH);
+  grad.addColorStop(0, '#0E9F8F');
+  grad.addColorStop(0.55, '#0B8C7F');
+  grad.addColorStop(1, '#4B6BF5');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, headerH);
+
+  ctx.fillStyle = 'rgba(255,255,255,0.18)';
+  rr(ctx, 34, 28, 34, 34, 10);
+  ctx.fill();
+  ctx.fillStyle = '#FFFFFF';
+  ctx.font = `700 18px ${POSTER_FONT}`;
+  ctx.textAlign = 'center';
+  ctx.fillText('报', 51, 51);
+
+  ctx.textAlign = 'left';
+  ctx.font = `700 18px ${POSTER_FONT}`;
+  ctx.fillText('查班小助手', 80, 52);
+
+  ctx.textAlign = 'right';
+  ctx.fillStyle = '#D4F5F0';
+  ctx.font = `400 14px ${POSTER_FONT}`;
+  ctx.fillText('报告员 · 本周', W - 34, 52);
+  ctx.textAlign = 'left';
+
+  const who = name || '报告员';
+  const nameSize = fitFont(ctx, who, '800', 40, W - 68, POSTER_FONT);
+  ctx.fillStyle = '#FFFFFF';
+  ctx.font = `800 ${nameSize}px ${POSTER_FONT}`;
+  ctx.fillText(who, 34, 116);
+
+  const range = weekRangeLabel(days);
+  if (range) {
+    ctx.fillStyle = '#D4F5F0';
+    ctx.font = `400 15px ${POSTER_FONT}`;
+    ctx.fillText(range + ' · 一周位置', 34, 148);
+  }
+
+  for (let i = 0; i < days.length; i++) {
+    const d = days[i];
+    const rowY = headerH + i * rowH;
+
+    ctx.fillStyle = '#E7F7F4';
+    rr(ctx, 30, rowY + 20, 60, 60, 14);
+    ctx.fill();
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#0B8C7F';
+    ctx.font = `400 12px ${POSTER_FONT}`;
+    ctx.fillText(d.weekLabel || weekOf(d.ymd), 60, rowY + 45);
+    ctx.font = `700 20px ${POSTER_FONT}`;
+    ctx.fillText(mdOf(d.ymd), 60, rowY + 69);
+
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#18213A';
+    ctx.font = `700 15px ${POSTER_FONT}`;
+    drawWrapped(ctx, `${d.weekLabel || ''} ${d.dateLabel || ''}`.trim(), 108, rowY + 40,
+      W - 30 - 108, 19, 1);
+
+    ctx.fillStyle = '#7B8499';
+    ctx.font = `400 13px ${POSTER_FONT}`;
+    drawWrapped(ctx, '上午：' + reporterHalfText(d.am), 108, rowY + 70,
+      W - 30 - 108, 18, 1);
+    drawWrapped(ctx, '下午：' + reporterHalfText(d.pm), 108, rowY + 94,
+      W - 30 - 108, 18, 1);
+
+    ctx.strokeStyle = '#EDF0F7';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(30, rowY + rowH - 0.5);
+    ctx.lineTo(W - 30, rowY + rowH - 0.5);
+    ctx.stroke();
+  }
+
+  const footY = headerH + days.length * rowH;
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#7B8499';
+  ctx.font = `400 12px ${POSTER_FONT}`;
+  ctx.fillText('来自科室排班表 · 只显示位置和搭档', 34, footY + 38);
+  ctx.textAlign = 'right';
+  ctx.font = `600 11px ${POSTER_FONT}`;
+  ctx.fillText('查班小助手', W - 34, footY + 38);
+
+  return canvas;
+}
+
 function downloadBlob(blob, filename) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -787,6 +907,33 @@ function downloadBlob(blob, filename) {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
+/** 把 canvas 交给系统分享面板；不支持文件分享时退回下载。 */
+async function shareCanvas(canvas, text, filename) {
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+  if (!blob) {
+    toast('生成图片失败');
+    return;
+  }
+  let file = null;
+  try {
+    if (typeof File !== 'undefined') {
+      file = new File([blob], filename, { type: 'image/png' });
+    }
+  } catch (e) {
+    file = null;
+  }
+  try {
+    if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: '查班小助手', text });
+      return;
+    }
+  } catch (e) {
+    if (e && e.name === 'AbortError') return;
+  }
+  downloadBlob(blob, filename);
+  toast('已生成图片，长按可保存或转发');
 }
 
 async function shareWeekImage() {
@@ -799,31 +946,19 @@ async function shareWeekImage() {
   const who = store.get(K.name, '');
   const text = (who ? who + ' ' : '') + '本周排班' + (range ? '（' + range + '）' : '');
   const filename = '查班-' + (range || '本周') + '.png';
+  await shareCanvas(canvas, text, filename);
+}
 
-  canvas.toBlob(async (blob) => {
-    if (!blob) {
-      toast('生成图片失败');
-      return;
-    }
-    let file = null;
-    try {
-      if (typeof File !== 'undefined') {
-        file = new File([blob], filename, { type: 'image/png' });
-      }
-    } catch (e) {
-      file = null;
-    }
-    try {
-      if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({ files: [file], title: '本周排班', text });
-        return;
-      }
-    } catch (e) {
-      if (e && e.name === 'AbortError') return;
-    }
-    downloadBlob(blob, filename);
-    toast('已生成图片，长按可保存或转发');
-  }, 'image/png');
+async function shareReporterImage() {
+  if (!reporterShare || !reporterShare.days.length) {
+    toast('先查一个报告员');
+    return;
+  }
+  const { name, days } = reporterShare;
+  const range = weekRangeLabel(days);
+  const text = (name ? name + ' ' : '') + '本周报告员排班' + (range ? '（' + range + '）' : '');
+  const filename = '查班-报告员-' + (range || '本周') + '.png';
+  await shareCanvas(buildReporterPoster(name, days), text, filename);
 }
 
 // ---------- 初始化 ----------
@@ -835,7 +970,6 @@ async function init() {
   setKind(state.kind);
   $('nameInput').value = store.get(K.name, '');
   $('leadInput').value = store.get(K.lead, '30');
-  $('setTheme').value = store.get(K.theme, 'system');
 
   $('btnImport').onclick = () => $('filePicker').click();
   $('btnImportEmpty').onclick = () => $('filePicker').click();
@@ -850,11 +984,14 @@ async function init() {
   $('nameInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') onQuery(); });
   $('btnCalendar').onclick = exportCalendar;
   $('btnShare').onclick = shareWeekImage;
-  $('setTheme').onchange = (e) => {
-    applyTheme(e.target.value);
-    toast('外观已切换');
-  };
-  $('btnWeather').onclick = () => ensureWeather(state.days).then(() => {
+  $('btnShareReporter').onclick = shareReporterImage;
+  document.querySelectorAll('#setThemeSeg button').forEach((b) => {
+    b.onclick = () => {
+      applyTheme(b.dataset.theme);
+      toast('外观已切换');
+    };
+  });
+  $('btnWeather').onclick = () => ensureWeather(state.days, true).then(() => {
     if (state.days.length) toast('天气已刷新');
   });
   $('btnSaveLead').onclick = async () => {
@@ -868,7 +1005,6 @@ async function init() {
   $('btnSettings').onclick = () => {
     refreshFileStatus();
     $('setVersion').textContent = appVersionLabel() + ' ›';
-    $('setTheme').value = store.get(K.theme, 'system');
     $('dlgSettings').showModal();
   };
   $('btnCloseSettings').onclick = () => $('dlgSettings').close();
@@ -881,13 +1017,10 @@ async function init() {
     $('dlgVersion').close();
     hardReload();
   };
-  $('btnCopyUpdateLink').onclick = async () => {
-    const ok = await copyText(ANDROID_DOWNLOAD_PAGE);
-    if (ok) {
-      toast('下载链接已复制，发给用安卓的同事即可');
-    } else {
-      window.prompt('复制失败，请长按/全选下面的链接手动复制：', ANDROID_DOWNLOAD_PAGE);
-    }
+  $('btnCopyUpdateLink').onclick = copyApkLink;
+  $('btnCopyApkFromSettings').onclick = copyApkLink;
+  $('btnOpenApkPage').onclick = () => {
+    window.open(ANDROID_DOWNLOAD_PAGE, '_blank', 'noopener');
   };
   $('btnOpenUpdatePage').onclick = () => {
     window.open(ANDROID_DOWNLOAD_PAGE, '_blank', 'noopener');
@@ -896,28 +1029,24 @@ async function init() {
     $('dlgSettings').close();
     hardReload();
   };
-  $('btnRefresh').onclick = () => hardReload();
+  $('btnRefresh').onclick = () => {
+    const btn = $('btnRefresh');
+    if (btn.classList.contains('has-update')) {
+      hardReload();
+    } else {
+      refreshAll();
+    }
+  };
   $('buildLine').textContent =
     appVersionLabel() + ' · 安卓同步 v' + ANDROID_VERSION + ' · 构建 ' + appBuild();
   $('btnSelfCheck').onclick = runSelfCheck;
   checkForUpdate();
 
   $('btnGuide').onclick = () => {
-    const lines = [
-      '1. 在微信里点开排班 xlsx → 右上角 ··· → 用其他应用打开 → 存储到「文件」',
-      '2. 回到这里点「导入排班表」，从「文件」里选它；导入时选「医生排班表」或「报告员表」',
-      '3. 顶部输入姓名 → 查询（下面可切「医生 / 报告员」）',
-      '4. 想看搭档、天气、贴心提醒：日卡上直接就有；长按某天可以复制',
-      '5. 要提醒：点「导出到日历」→ 打开生成的 .ics → 日历里「添加全部」，到点由系统日历提醒',
-      '6. 想少点几次：Safari 分享 → 添加到主屏幕，以后从桌面图标打开',
-      '7. 夜班看班：设置 → 外观 → 深色；首页「分享本周」可生成整周班表图片发群里',
-      '',
-      '说明：网页版没有后台闹钟，所以提醒走系统日历；数据只存在这台设备上。',
-    ];
-    const dlg = $('dlgSettings');
-    dlg.close();
-    alert(lines.join('\n'));
+    $('dlgSettings').close();
+    $('dlgGuide').showModal();
   };
+  $('btnCloseGuide').onclick = () => $('dlgGuide').close();
   $('btnClear').onclick = () => {
     if (!confirm('清空本机的表、姓名和天气缓存？')) return;
     Object.values(K).forEach((k) => store.del(k));
@@ -925,11 +1054,11 @@ async function init() {
     state.weather = {};
     state.weatherAt = 0;
     state.days = [];
+    reporterShare = null;
     $('nameInput').value = '';
     renderList([]);
     refreshFileStatus();
     applyTheme('system', false);
-    $('setTheme').value = 'system';
     $('dlgSettings').close();
     toast('已清空');
   };
@@ -945,7 +1074,11 @@ async function init() {
     await renderWeek();
   }
 
-  $('btnClosePerson').onclick = () => $('dlgPerson').close();
+  $('btnClosePerson').onclick = () => {
+    $('dlgPerson').close();
+    reporterShare = null;
+    $('btnShareReporter').style.display = 'none';
+  };
   $('btnRooms').onclick = openRooms;
   $('btnCloseRooms').onclick = () => $('dlgRooms').close();
 
@@ -1091,6 +1224,15 @@ async function copyText(text) {
   }
 }
 
+async function copyApkLink() {
+  const ok = await copyText(ANDROID_DOWNLOAD_PAGE);
+  if (ok) {
+    toast('安卓下载链接已复制，发给用安卓的同事即可');
+  } else {
+    window.prompt('复制失败，请长按/全选下面的链接手动复制：', ANDROID_DOWNLOAD_PAGE);
+  }
+}
+
 function openVersionDialog() {
   $('verSub').textContent = appVersionLabel() + ' · 构建 ' + appBuild();
   $('verPwa').textContent = 'v' + (self.__APP_VERSION__ || APP_VERSION);
@@ -1123,9 +1265,8 @@ async function checkForUpdate() {
     if (remote && local && remote !== local) {
       const btn = $('btnRefresh');
       if (!btn) return;
-      btn.textContent = '有新版本 · 点我刷新';
       btn.classList.add('has-update');
-      btn.setAttribute('title', '本地 ' + local + ' → 线上 ' + remote);
+      btn.setAttribute('title', '有新版本：本地 ' + local + ' → 线上 ' + remote);
     }
   } catch (e) {
     // 离线或网络差：保持原样
@@ -1238,5 +1379,5 @@ function loadCachedWeek() {
 }
 
 self.__APP_VERSION__ = APP_VERSION;
-self.__APP_BUILD__ = '2026-10-23T12:40:11';
+self.__APP_BUILD__ = '2026-10-23T12:56:47';
 document.addEventListener('DOMContentLoaded', init);

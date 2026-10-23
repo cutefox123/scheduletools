@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<!-- build:2026-10-23T12:40:11 -->
+<!-- build:2026-10-23T12:56:47 -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
 <title>查班小助手</title>
@@ -31,19 +31,42 @@
 <meta name="format-detection" content="telephone=no">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon-192.png" sizes="192x192">
-<link rel="stylesheet" href="styles.css?v=2026-10-23T12%3A40%3A11">
+<link rel="stylesheet" href="styles.css?v=2026-10-23T12%3A56%3A47">
 </head>
 <body>
 <div id="app">
-  <!-- 顶部渐变卡 -->
+  <!-- 顶部渐变卡：对齐安卓 3.14（标题 + 诊室/分享/设置，姓名查询，医生/报告员 + 导入） -->
   <header class="hero">
     <div class="hero-top">
       <h1>查班小助手</h1>
-      <button id="btnSettings" class="icon-btn" aria-label="设置">⚙</button>
-    </div>
-    <div class="hero-sub-row">
-      <p class="hero-sub">导入排班表，自动读出一周班次 · 不联网也能看</p>
-      <button id="btnRefresh" class="hero-refresh" type="button">刷新</button>
+      <div class="hero-icons">
+        <button id="btnRefresh" class="icon-btn" type="button" aria-label="刷新" title="刷新">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/>
+          </svg>
+        </button>
+        <button id="btnRooms" class="icon-btn" type="button" aria-label="诊室查询" title="诊室查询">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4 21h16"/><path d="M6 21V4a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v17"/>
+            <path d="M15 12h.01"/>
+          </svg>
+        </button>
+        <button id="btnShare" class="icon-btn" type="button" aria-label="分享本周" title="分享本周">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 16V4"/><path d="M8 8l4-4 4 4"/><path d="M5 14v6h14v-6"/>
+          </svg>
+        </button>
+        <button id="btnSettings" class="icon-btn" type="button" aria-label="设置" title="设置">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 8 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 3.68 15a1.65 1.65 0 0 0-1.51-1H2a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 3.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 3.68 1.65 1.65 0 0 0 10 2.17V2a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 20.32 9a1.65 1.65 0 0 0 1.51 1H22a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+        </button>
+      </div>
     </div>
 
     <div class="search-row">
@@ -52,39 +75,14 @@
       <button id="btnQuery" class="btn-white">查询</button>
     </div>
 
-    <div class="seg" id="seg">
-      <button data-kind="doctor" class="on">医生</button>
-      <button data-kind="reporter">报告员</button>
+    <div class="hero-tools">
+      <div class="seg" id="seg">
+        <button data-kind="doctor" class="on">医生</button>
+        <button data-kind="reporter">报告员</button>
+      </div>
+      <button id="btnImport" class="btn-ghost solid hero-import">导入排班表</button>
     </div>
-
-    <div class="hero-actions">
-      <button id="btnImport" class="btn-ghost solid">导入排班表</button>
-      <button id="btnCalendar" class="btn-ghost">导出到日历</button>
-    </div>
-
-    <div class="hero-actions">
-      <button id="btnRooms" class="btn-ghost">诊室查询</button>
-      <button id="btnShare" class="btn-ghost">分享本周</button>
-    </div>
-
-    <p id="fileStatus" class="hero-file">医生表：尚未导入</p>
-    <p id="fileStatusRep" class="hero-file">报告员表：尚未导入</p>
   </header>
-
-  <!-- 提醒设置 -->
-  <section class="card">
-    <div class="card-head">
-      <span>提醒设置</span>
-      <button id="btnWeather" class="link">刷新天气 ⟳</button>
-    </div>
-    <div class="row">
-      <span>上班前提早</span>
-      <input id="leadInput" type="number" inputmode="numeric" min="0" max="240" value="30">
-      <span>分钟</span>
-      <button id="btnSaveLead" class="btn-primary sm">保存</button>
-    </div>
-    <p class="hint" id="calHint">iPhone 上这一项会写进导出的日历事件，由系统日历到点提醒。</p>
-  </section>
 
   <!-- 列表 -->
   <main id="weekList" class="week"></main>
@@ -121,6 +119,7 @@
   <input id="personSearch" type="search" placeholder="搜索姓名" autocomplete="off">
   <div id="personList" class="person-list"></div>
   <div class="dlg-actions">
+    <button id="btnShareReporter" class="btn-primary" type="button" style="display:none">分享</button>
     <button id="btnClosePerson" class="btn-ghost solid">关闭</button>
   </div>
 </dialog>
@@ -128,28 +127,99 @@
 <!-- 设置 -->
 <dialog id="dlgSettings">
   <h3>设置</h3>
-  <div class="set-row"><span>外观</span>
-    <select id="setTheme" aria-label="外观">
-      <option value="system">跟随系统</option>
-      <option value="light">浅色</option>
-      <option value="dark">深色</option>
-    </select>
+
+  <div class="set-section">
+    <div class="set-title">外观</div>
+    <div class="seg seg-theme" id="setThemeSeg">
+      <button data-theme="system" class="on">跟随系统</button>
+      <button data-theme="light">浅色</button>
+      <button data-theme="dark">深色</button>
+    </div>
+    <p class="hint">夜班看班可以选「深色」，也可以交给系统的定时深色模式；分享出去的图片仍是浅色。</p>
   </div>
-  <p class="hint" style="margin-top:8px">夜班看班可以选「深色」，也可以交给系统的定时深色模式；分享出去的图片仍是浅色。</p>
-  <div class="set-row"><span>提醒分钟</span><b id="setLead">30</b></div>
-  <div class="set-row"><span>医生表</span><b id="setDoctor">—</b></div>
-  <div class="set-row"><span>报告员表</span><b id="setReporter">—</b></div>
-  <div class="set-row set-row-link" id="rowVersion" role="button" tabindex="0" aria-label="查看版本与更新日志">
-    <span>版本 / 更新日志</span><b id="setVersion">— ›</b>
+
+  <div class="set-section">
+    <div class="set-title">提醒与日历</div>
+    <div class="row">
+      <span>上班前提早</span>
+      <input id="leadInput" type="number" inputmode="numeric" min="0" max="240" value="30">
+      <span>分钟</span>
+      <button id="btnSaveLead" class="btn-primary sm">保存</button>
+    </div>
+    <p class="hint" id="calHint">把本周班次导出成 .ics，用系统日历打开后添加，到点由日历提醒。</p>
+    <div class="dlg-actions">
+      <button id="btnCalendar" class="btn-ghost solid" type="button">导出到日历</button>
+      <button id="btnWeather" class="btn-ghost solid" type="button">刷新天气 ⟳</button>
+    </div>
   </div>
-  <div class="dlg-actions wrap">
-    <button id="btnGuide" class="btn-ghost solid">使用说明</button>
-    <button id="btnSelfCheck" class="btn-ghost solid">自检</button>
-    <button id="btnHardReload" class="btn-ghost solid">强制刷新</button>
-    <button id="btnClear" class="btn-ghost solid">清空数据</button>
+
+  <div class="set-section">
+    <div class="set-title">排班表</div>
+    <div class="set-row"><span>医生表</span><b id="setDoctor">—</b></div>
+    <div class="set-row"><span>报告员表</span><b id="setReporter">—</b></div>
   </div>
+
+  <div class="set-section">
+    <div class="set-title">给用安卓的同事</div>
+    <p class="hint">安卓最新版 v3.14。旧版本的应用内更新可能失效，复制下载链接发给他们手动覆盖安装。</p>
+    <div class="dlg-actions">
+      <button id="btnCopyApkFromSettings" class="btn-ghost solid" type="button">复制下载链接</button>
+      <button id="btnOpenApkPage" class="btn-primary" type="button">打开下载页</button>
+    </div>
+  </div>
+
+  <div class="set-section">
+    <div class="set-title">帮助与更新</div>
+    <div class="set-row set-row-link" id="rowVersion" role="button" tabindex="0" aria-label="查看版本与更新日志">
+      <span>版本 / 更新日志</span><b id="setVersion">— ›</b>
+    </div>
+    <div class="dlg-actions wrap">
+      <button id="btnGuide" class="btn-ghost solid">使用说明</button>
+      <button id="btnSelfCheck" class="btn-ghost solid">自检</button>
+      <button id="btnHardReload" class="btn-ghost solid">强制刷新</button>
+      <button id="btnClear" class="btn-ghost solid">清空数据</button>
+    </div>
+  </div>
+
   <div class="dlg-actions">
     <button id="btnCloseSettings" class="btn-primary">关闭</button>
+  </div>
+</dialog>
+
+<!-- 使用说明 -->
+<dialog id="dlgGuide">
+  <h3>使用引导</h3>
+  <div class="guide-list">
+    <div class="guide-step">
+      <b>① 导入排班表</b>
+      <p>在微信里点开排班表 → 右上角「···」→「用其他应用打开」→ 存储到「文件」。<br>
+         回到这里点「导入排班表」，导入时选「医生排班表」或「报告员表」。</p>
+    </div>
+    <div class="guide-step">
+      <b>② 查一次姓名</b>
+      <p>顶部输入姓名点「查询」，下面可以切「医生 / 报告员」（默认医生）。<br>
+         日卡上会写清班次、时段、搭档、天气和贴心提醒。</p>
+    </div>
+    <div class="guide-step">
+      <b>③ 打开日历提醒</b>
+      <p>设置 → 「导出到日历」→ 打开生成的 .ics → 日历里点「添加全部」。<br>
+         到点由系统日历提醒，App 没开着也不会漏班。</p>
+    </div>
+    <div class="guide-step">
+      <b>④ 分享本周</b>
+      <p>首页「分享本周」生成整周班表图片，直接发群里；查报告员时，在结果弹窗右上角点「分享」。</p>
+    </div>
+    <div class="guide-step">
+      <b>⑤ 夜班看班</b>
+      <p>设置 → 外观 → 选「深色」，或者让系统按时间自动切换。分享出去的图片仍是浅色。</p>
+    </div>
+    <div class="guide-step">
+      <b>⑥ 添加到主屏幕</b>
+      <p>Safari 打开本页 → 底部「分享」→「添加到主屏幕」，之后从桌面图标打开就和 App 一样。</p>
+    </div>
+  </div>
+  <div class="dlg-actions">
+    <button id="btnCloseGuide" class="btn-primary">知道了</button>
   </div>
 </dialog>
 
@@ -195,6 +265,6 @@
 
 <input id="filePicker" type="file" accept=".xlsx,.xls,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
 
-<script type="module" src="app.js?v=2026-10-23T12%3A40%3A11"></script>
+<script type="module" src="app.js?v=2026-10-23T12%3A56%3A47"></script>
 </body>
 </html>
