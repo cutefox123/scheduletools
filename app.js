@@ -1,8 +1,8 @@
 // 查班小助手 PWA —— 主逻辑
 // 解析全部在本地完成（js/xlsx.js、js/xls.js、js/parser.js、js/rooms.js），数据只存 localStorage。
 
-import { fetchWeather } from './weather.js?v=2026-10-23T12%3A59%3A35';
-import { buildTips } from './tips.js?v=2026-10-23T12%3A59%3A35';
+import { fetchWeather } from './weather.js?v=2026-10-23T13%3A06%3A29';
+import { buildTips } from './tips.js?v=2026-10-23T13%3A06%3A29';
 
 const K = {
   doctorRows: 'sa.doctorRows',
@@ -40,11 +40,12 @@ const $ = (id) => document.getElementById(id);
 // 版本跟进：网页版与安卓正式版保持同一个版本号，构建戳只用于判断“网页有没有更新”。
 const APP_VERSION = '3.14';
 const ANDROID_VERSION = '3.14';
-const ANDROID_DOWNLOAD_PAGE =
-  'https://lovenest-1500804548.cos.ap-guangzhou.myqcloud.com/schedule/download.html';
+// 安卓安装包直链：COS 不允许 .apk 后缀，.bin 就是 APK 本体，Content-Disposition 会还原文件名。
+const ANDROID_APK_URL =
+  'https://lovenest-1500804548.cos.ap-guangzhou.myqcloud.com/schedule/scheduleassistant-latest.bin';
 const APP_NOTES = [
   '🔄 网页版不需要下载安装包；点「强制刷新」就能拿到最新页面',
-  '📱 安卓旧版本（低于 v3.14）请复制下载链接，在浏览器里手动下载安装包',
+  '📱 安卓旧版本（低于 v3.14）请复制安装包直链，在浏览器里手动下载安装包',
   '🔗 链接可以直接发给用安卓的同事，覆盖安装后姓名、提醒和两张表都会保留',
 ];
 const LEGACY_NOTICE =
@@ -176,10 +177,10 @@ async function loadModules() {
       return false;
     }
   };
-  await load('xlsx', './xlsx.js?v=2026-10-23T12%3A59%3A35');
-  await load('xls', './xls.js?v=2026-10-23T12%3A59%3A35');
-  await load('parser', './parser.js?v=2026-10-23T12%3A59%3A35');
-  await load('rooms', './rooms.js?v=2026-10-23T12%3A59%3A35');
+  await load('xlsx', './xlsx.js?v=2026-10-23T13%3A06%3A29');
+  await load('xls', './xls.js?v=2026-10-23T13%3A06%3A29');
+  await load('parser', './parser.js?v=2026-10-23T13%3A06%3A29');
+  await load('rooms', './rooms.js?v=2026-10-23T13%3A06%3A29');
   if (!mod.parser) {
     toast('解析模块未就绪，页面仍可打开');
   }
@@ -1029,10 +1030,10 @@ async function init() {
   $('btnCopyUpdateLink').onclick = copyApkLink;
   $('btnCopyApkFromSettings').onclick = copyApkLink;
   $('btnOpenApkPage').onclick = () => {
-    window.open(ANDROID_DOWNLOAD_PAGE, '_blank', 'noopener');
+    window.open(ANDROID_APK_URL, '_blank', 'noopener');
   };
   $('btnOpenUpdatePage').onclick = () => {
-    window.open(ANDROID_DOWNLOAD_PAGE, '_blank', 'noopener');
+    window.open(ANDROID_APK_URL, '_blank', 'noopener');
   };
   $('btnHardReload').onclick = () => {
     $('dlgSettings').close();
@@ -1234,11 +1235,11 @@ async function copyText(text) {
 }
 
 async function copyApkLink() {
-  const ok = await copyText(ANDROID_DOWNLOAD_PAGE);
+  const ok = await copyText(ANDROID_APK_URL);
   if (ok) {
-    toast('安卓下载链接已复制，发给用安卓的同事即可');
+    toast('安卓安装包直链已复制，发给用安卓的同事即可');
   } else {
-    window.prompt('复制失败，请长按/全选下面的链接手动复制：', ANDROID_DOWNLOAD_PAGE);
+    window.prompt('复制失败，请长按/全选下面的链接手动复制：', ANDROID_APK_URL);
   }
 }
 
@@ -1246,7 +1247,7 @@ function openVersionDialog() {
   $('verSub').textContent = appVersionLabel() + ' · 构建 ' + appBuild();
   $('verPwa').textContent = 'v' + (self.__APP_VERSION__ || APP_VERSION);
   $('verAndroid').textContent = 'v' + ANDROID_VERSION;
-  $('verLink').textContent = ANDROID_DOWNLOAD_PAGE;
+  $('verLink').textContent = ANDROID_APK_URL;
   const notesEl = $('verNotes');
   notesEl.textContent = '';
   for (const line of APP_NOTES) {
@@ -1388,5 +1389,5 @@ function loadCachedWeek() {
 }
 
 self.__APP_VERSION__ = APP_VERSION;
-self.__APP_BUILD__ = '2026-10-23T12:59:35';
+self.__APP_BUILD__ = '2026-10-23T13:06:29';
 document.addEventListener('DOMContentLoaded', init);
