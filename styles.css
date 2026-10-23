@@ -535,6 +535,69 @@ dialog input[type="search"] {
 
 .set-row b { color: var(--text); font-weight: 600; word-break: break-all; text-align: right; }
 
+.set-row-link {
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.set-row-link:active { opacity: .6; }
+
+/* 版本与更新日志 */
+.ver-notes,
+.ver-warn {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--input);
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--sub);
+}
+
+.ver-notes b,
+.ver-warn b {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.ver-notes ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.ver-notes li { margin: 3px 0; }
+
+.ver-notes .dlg-actions { margin-top: 10px; }
+
+.ver-notes .dlg-actions button { min-height: 42px; font-size: 13px; }
+
+.ver-warn {
+  background: var(--mark-bg);
+  color: var(--sub);
+}
+
+.ver-warn b { color: var(--mark-fg); }
+
+.ver-warn p { margin: 0 0 8px; }
+
+.ver-warn code {
+  display: block;
+  margin: 6px 0 10px;
+  padding: 8px 9px;
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--text);
+  font-size: 10.5px;
+  line-height: 1.5;
+  word-break: break-all;
+}
+
+.ver-warn .dlg-actions { margin-top: 0; }
+
+.ver-warn .dlg-actions button { min-height: 42px; font-size: 13px; }
+
 .set-row select {
   background: var(--input);
   color: var(--text);

@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<!-- build:2026-10-21T00:58:05 -->
+<!-- build:2026-10-23T12:40:11 -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
 <title>查班小助手</title>
@@ -31,7 +31,7 @@
 <meta name="format-detection" content="telephone=no">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon-192.png" sizes="192x192">
-<link rel="stylesheet" href="styles.css?v=2026-10-21T00%3A58%3A05">
+<link rel="stylesheet" href="styles.css?v=2026-10-23T12%3A40%3A11">
 </head>
 <body>
 <div id="app">
@@ -139,7 +139,9 @@
   <div class="set-row"><span>提醒分钟</span><b id="setLead">30</b></div>
   <div class="set-row"><span>医生表</span><b id="setDoctor">—</b></div>
   <div class="set-row"><span>报告员表</span><b id="setReporter">—</b></div>
-  <div class="set-row"><span>版本</span><b id="setVersion">—</b></div>
+  <div class="set-row set-row-link" id="rowVersion" role="button" tabindex="0" aria-label="查看版本与更新日志">
+    <span>版本 / 更新日志</span><b id="setVersion">— ›</b>
+  </div>
   <div class="dlg-actions wrap">
     <button id="btnGuide" class="btn-ghost solid">使用说明</button>
     <button id="btnSelfCheck" class="btn-ghost solid">自检</button>
@@ -148,6 +150,36 @@
   </div>
   <div class="dlg-actions">
     <button id="btnCloseSettings" class="btn-primary">关闭</button>
+  </div>
+</dialog>
+
+<!-- 版本与更新日志 -->
+<dialog id="dlgVersion">
+  <h3>版本与更新</h3>
+  <p class="dlg-sub" id="verSub">网页版 v3.14</p>
+  <div class="set-row"><span>网页版</span><b id="verPwa">v3.14</b></div>
+  <div class="set-row"><span>安卓最新版</span><b id="verAndroid">v3.14</b></div>
+
+  <div class="ver-notes">
+    <b>网页版更新方式</b>
+    <ul id="verNotes"></ul>
+    <div class="dlg-actions">
+      <button id="btnForceRefreshVersion" class="btn-primary" type="button">强制刷新网页版</button>
+    </div>
+  </div>
+
+  <div class="ver-warn">
+    <b>安卓旧版本（低于 v3.14）请手动更新</b>
+    <p id="verLegacy">旧版应用内更新可能失效，请复制下载链接到浏览器手动安装。</p>
+    <code id="verLink"></code>
+    <div class="dlg-actions">
+      <button id="btnCopyUpdateLink" class="btn-ghost solid" type="button">复制下载链接</button>
+      <button id="btnOpenUpdatePage" class="btn-primary" type="button">打开下载页</button>
+    </div>
+  </div>
+
+  <div class="dlg-actions">
+    <button id="btnCloseVersion" class="btn-ghost solid">关闭</button>
   </div>
 </dialog>
 
@@ -163,6 +195,6 @@
 
 <input id="filePicker" type="file" accept=".xlsx,.xls,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
 
-<script type="module" src="app.js?v=2026-10-21T00%3A58%3A05"></script>
+<script type="module" src="app.js?v=2026-10-23T12%3A40%3A11"></script>
 </body>
 </html>

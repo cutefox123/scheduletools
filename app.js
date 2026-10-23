@@ -1,8 +1,8 @@
 // 查班小助手 PWA —— 主逻辑
 // 解析全部在本地完成（js/xlsx.js、js/xls.js、js/parser.js、js/rooms.js），数据只存 localStorage。
 
-import { fetchWeather } from './weather.js?v=2026-10-21T00%3A58%3A05';
-import { buildTips } from './tips.js?v=2026-10-21T00%3A58%3A05';
+import { fetchWeather } from './weather.js?v=2026-10-23T12%3A40%3A11';
+import { buildTips } from './tips.js?v=2026-10-23T12%3A40%3A11';
 
 const K = {
   doctorRows: 'sa.doctorRows',
@@ -36,6 +36,21 @@ const TYPE_STYLE_DARK = {
 };
 
 const $ = (id) => document.getElementById(id);
+
+// 版本跟进：网页版与安卓正式版保持同一个版本号，构建戳只用于判断“网页有没有更新”。
+const APP_VERSION = '3.14';
+const ANDROID_VERSION = '3.14';
+const ANDROID_DOWNLOAD_PAGE =
+  'https://lovenest-1500804548.cos.ap-guangzhou.myqcloud.com/schedule/download.html';
+const APP_NOTES = [
+  '🔄 网页版不需要下载安装包；点「强制刷新」就能拿到最新页面',
+  '📱 安卓旧版本（低于 v3.14）请复制下载链接，在浏览器里手动下载安装包',
+  '🔗 链接可以直接发给用安卓的同事，覆盖安装后姓名、提醒和两张表都会保留',
+];
+const LEGACY_NOTICE =
+  '低于 v3.14 的安卓版：应用内检测更新可能失效或安装失败。请复制下面的链接，在手机浏览器打开，'
+  + '下载 v3.14 安装包后直接覆盖安装。网页版用户不用下载，点上面的「强制刷新」即可。';
+
 const store = {
   get(k, fallback = '') {
     try { return localStorage.getItem(k) ?? fallback; } catch { return fallback; }
@@ -157,10 +172,10 @@ async function loadModules() {
       return false;
     }
   };
-  await load('xlsx', './xlsx.js?v=2026-10-21T00%3A58%3A05');
-  await load('xls', './xls.js?v=2026-10-21T00%3A58%3A05');
-  await load('parser', './parser.js?v=2026-10-21T00%3A58%3A05');
-  await load('rooms', './rooms.js?v=2026-10-21T00%3A58%3A05');
+  await load('xlsx', './xlsx.js?v=2026-10-23T12%3A40%3A11');
+  await load('xls', './xls.js?v=2026-10-23T12%3A40%3A11');
+  await load('parser', './parser.js?v=2026-10-23T12%3A40%3A11');
+  await load('rooms', './rooms.js?v=2026-10-23T12%3A40%3A11');
   if (!mod.parser) {
     toast('解析模块未就绪，页面仍可打开');
   }
@@ -852,17 +867,38 @@ async function init() {
   };
   $('btnSettings').onclick = () => {
     refreshFileStatus();
-    $('setVersion').textContent = 'PWA ' + (self.__APP_VERSION__ || '1.0');
+    $('setVersion').textContent = appVersionLabel() + ' ›';
     $('setTheme').value = store.get(K.theme, 'system');
     $('dlgSettings').showModal();
   };
   $('btnCloseSettings').onclick = () => $('dlgSettings').close();
+  $('rowVersion').onclick = () => {
+    $('dlgSettings').close();
+    openVersionDialog();
+  };
+  $('btnCloseVersion').onclick = () => $('dlgVersion').close();
+  $('btnForceRefreshVersion').onclick = () => {
+    $('dlgVersion').close();
+    hardReload();
+  };
+  $('btnCopyUpdateLink').onclick = async () => {
+    const ok = await copyText(ANDROID_DOWNLOAD_PAGE);
+    if (ok) {
+      toast('下载链接已复制，发给用安卓的同事即可');
+    } else {
+      window.prompt('复制失败，请长按/全选下面的链接手动复制：', ANDROID_DOWNLOAD_PAGE);
+    }
+  };
+  $('btnOpenUpdatePage').onclick = () => {
+    window.open(ANDROID_DOWNLOAD_PAGE, '_blank', 'noopener');
+  };
   $('btnHardReload').onclick = () => {
     $('dlgSettings').close();
     hardReload();
   };
   $('btnRefresh').onclick = () => hardReload();
-  $('buildLine').textContent = '版本 ' + (self.__APP_VERSION__ || '未知');
+  $('buildLine').textContent =
+    appVersionLabel() + ' · 安卓同步 v' + ANDROID_VERSION + ' · 构建 ' + appBuild();
   $('btnSelfCheck').onclick = runSelfCheck;
   checkForUpdate();
 
@@ -880,7 +916,7 @@ async function init() {
     ];
     const dlg = $('dlgSettings');
     dlg.close();
-    alert(lines.join('\\n'));
+    alert(lines.join('\n'));
   };
   $('btnClear').onclick = () => {
     if (!confirm('清空本机的表、姓名和天气缓存？')) return;
@@ -928,7 +964,7 @@ function runSelfCheck() {
   const lines = [];
   const doctorRows = store.json(K.doctorRows, null);
   const reporterRows = store.json(K.reporterRows, null);
-  lines.push('版本：' + (self.__APP_VERSION__ || '未知'));
+  lines.push('版本：' + appVersionLabel() + ' · 构建 ' + appBuild());
   lines.push('');
 
   if (!doctorRows) {
@@ -1020,6 +1056,57 @@ async function hardReload() {
   location.replace(location.pathname + '?fresh=' + Date.now());
 }
 
+function appBuild() {
+  return self.__APP_BUILD__ || 'dev';
+}
+
+function appVersionLabel() {
+  return 'v' + (self.__APP_VERSION__ || APP_VERSION) + '（网页版）';
+}
+
+/** 复制文本；老浏览器没有 Clipboard API 时退回 textarea + execCommand。 */
+async function copyText(text) {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch (e) {
+    // 继续走下面的兜底
+  }
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.top = '-1000px';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    const ok = document.execCommand('copy');
+    ta.remove();
+    return ok;
+  } catch (e) {
+    return false;
+  }
+}
+
+function openVersionDialog() {
+  $('verSub').textContent = appVersionLabel() + ' · 构建 ' + appBuild();
+  $('verPwa').textContent = 'v' + (self.__APP_VERSION__ || APP_VERSION);
+  $('verAndroid').textContent = 'v' + ANDROID_VERSION;
+  $('verLink').textContent = ANDROID_DOWNLOAD_PAGE;
+  const notesEl = $('verNotes');
+  notesEl.textContent = '';
+  for (const line of APP_NOTES) {
+    const li = document.createElement('li');
+    li.textContent = line;
+    notesEl.appendChild(li);
+  }
+  $('verLegacy').textContent = LEGACY_NOTICE;
+  $('dlgVersion').showModal();
+}
+
 // 拉一次线上 index.html，比对构建戳；不一样就把首页按钮点亮
 let updateCheckBusy = false;
 async function checkForUpdate() {
@@ -1032,7 +1119,7 @@ async function checkForUpdate() {
     const m = html.match(/<!-- build:([^>]*) -->/);
     if (!m) return;
     const remote = m[1].trim();
-    const local = self.__APP_VERSION__ || '';
+    const local = appBuild();
     if (remote && local && remote !== local) {
       const btn = $('btnRefresh');
       if (!btn) return;
@@ -1150,5 +1237,6 @@ function loadCachedWeek() {
   }
 }
 
-self.__APP_VERSION__ = '2026-10-21T00:58:05';
+self.__APP_VERSION__ = APP_VERSION;
+self.__APP_BUILD__ = '2026-10-23T12:40:11';
 document.addEventListener('DOMContentLoaded', init);
