@@ -1,8 +1,8 @@
 // 查班小助手 PWA —— 主逻辑
 // 解析全部在本地完成（js/xlsx.js、js/xls.js、js/parser.js、js/rooms.js），数据只存 localStorage。
 
-import { fetchWeather } from './weather.js?v=2026-10-24T10%3A20%3A15';
-import { buildTips } from './tips.js?v=2026-10-24T10%3A20%3A15';
+import { fetchWeather } from './weather.js?v=2026-10-24T10%3A37%3A38';
+import { buildTips } from './tips.js?v=2026-10-24T10%3A37%3A38';
 
 const K = {
   doctorRows: 'sa.doctorRows',
@@ -16,6 +16,7 @@ const K = {
   weather: 'sa.weather',
   weatherAt: 'sa.weatherAt',
   theme: 'sa.theme',
+  calOn: 'sa.calOn', // 首页「医生日历提醒」开关：记本周（周一日期），换周自动算关闭
 };
 
 const TYPE_STYLE = {
@@ -38,7 +39,7 @@ const TYPE_STYLE_DARK = {
 const $ = (id) => document.getElementById(id);
 
 // 版本跟进：网页版与安卓正式版保持同一个版本号，构建戳只用于判断“网页有没有更新”。
-const APP_VERSION = '3.20';
+const APP_VERSION = '3.21';
 const ANDROID_VERSION = '3.14';
 // 安卓安装包直链：COS 不允许 .apk 后缀，.bin 就是 APK 本体，Content-Disposition 会还原文件名。
 const ANDROID_APK_URL =
@@ -179,10 +180,10 @@ async function loadModules() {
       return false;
     }
   };
-  await load('xlsx', './xlsx.js?v=2026-10-24T10%3A20%3A15');
-  await load('xls', './xls.js?v=2026-10-24T10%3A20%3A15');
-  await load('parser', './parser.js?v=2026-10-24T10%3A20%3A15');
-  await load('rooms', './rooms.js?v=2026-10-24T10%3A20%3A15');
+  await load('xlsx', './xlsx.js?v=2026-10-24T10%3A37%3A38');
+  await load('xls', './xls.js?v=2026-10-24T10%3A37%3A38');
+  await load('parser', './parser.js?v=2026-10-24T10%3A37%3A38');
+  await load('rooms', './rooms.js?v=2026-10-24T10%3A37%3A38');
   if (!mod.parser) {
     toast('解析模块未就绪，页面仍可打开');
   }
@@ -273,6 +274,7 @@ async function renderWeek({ keepName = false } = {}) {
 }
 
 function renderList(days) {
+  paintCalSwitch();
   const list = $('weekList');
   list.innerHTML = '';
   $('empty').style.display = days.length ? 'none' : 'block';
@@ -422,6 +424,7 @@ async function pickPerson(names, onPick, title) {
   $('btnShareReporter').style.display = 'none';
   $('btnCalendarReporter').style.display = 'none';
   $('personTitle').textContent = title || '查谁的班';
+  setCalStatus('');
   $('personSearch').value = '';
   $('personSearch').style.display = '';
   const listEl = $('personList');
@@ -515,6 +518,7 @@ function showReporterWeek(name, days) {
   const dlg = $('dlgPerson');
   reporterShare = { name, days: days || [] };
   $('personTitle').textContent = name + ' · 本周';
+  setCalStatus('');
   $('personSearch').style.display = 'none';
   const hasDays = days && days.length;
   $('btnCalendarReporter').style.display = hasDays ? '' : 'none';
@@ -587,11 +591,30 @@ function buildIcs(days) {
   return lines.join('\r\n');
 }
 
-async function exportCalendar(daysOverride = null) {
+/**
+ * 把一周班次导成 .ics。
+ * 返回 { ok, count, msg }；提示由调用方决定——弹窗里必须用「行内结果条」，
+ * 因为 toast 会被 <dialog> 的 top layer 盖住，用户点了什么也看不到。
+ */
+async function exportCalendar(daysOverride = null, opts = {}) {
   const days = daysOverride || state.days;
-  if (!days.length) { toast(daysOverride ? '还没有可写入的班次' : '先导入排班表'); return; }
+  const inline = opts.inline === true;
+  const say = (text, kind) => {
+    if (inline) setCalStatus(text, kind);
+    else toast(text);
+  };
+  if (!days.length) {
+    say(daysOverride ? '这个人这一周还没有排班数据' : '先导入排班表', 'none');
+    return { ok: false, count: 0 };
+  }
   const ics = buildIcs(days);
-  if (!ics.includes('BEGIN:VEVENT')) { toast('这一周没有需要提醒的班次'); return; }
+  const count = (ics.match(/BEGIN:VEVENT/g) || []).length;
+  if (!count) {
+    say(daysOverride
+      ? '这一周没有可写入的班次（休息、下夜都不写），日历没有变化'
+      : '这一周没有需要提醒的班次（休息、下夜都不写）', 'none');
+    return { ok: false, count: 0 };
+  }
   const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -601,7 +624,65 @@ async function exportCalendar(daysOverride = null) {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 4000);
-  toast('已生成日历文件，在“文件”里点它会导入日历');
+  say(`已生成 ${count} 个班次的日历文件，在“文件”里点它会导入日历`, 'ok');
+  return { ok: true, count };
+}
+
+/** 弹窗里的写入结果条：ok / none / error 三种配色。 */
+function setCalStatus(text, kind) {
+  const el = $('calStatus');
+  if (!el) return;
+  if (!text) {
+    el.hidden = true;
+    el.textContent = '';
+    el.removeAttribute('data-kind');
+    return;
+  }
+  el.hidden = false;
+  el.textContent = text;
+  el.dataset.kind = kind || 'none';
+}
+
+// ---------- 首页「医生日历提醒」开关 ----------
+// 网页版写不了系统日历，只能生成 .ics 让用户点开导入，所以开关状态记在本地：
+// 开 = 本周已经导出过（再点一次会重新导出最新的），换一周自动回到关闭。
+function calWeekKey() {
+  const days = (state.days || []).filter((d) => d && d.ymd);
+  return days.length ? days[0].ymd : '';
+}
+
+function calSwitchOn() {
+  const key = calWeekKey();
+  return !!key && store.get(K.calOn, '') === key;
+}
+
+function paintCalSwitch() {
+  const on = calSwitchOn();
+  const sw = $('calSw');
+  if (sw) sw.setAttribute('aria-checked', on ? 'true' : 'false');
+  const hint = $('calRowHint');
+  if (hint) {
+    hint.textContent = on
+      ? '本周班次已导出，可再点一次更新'
+      : '打开后把本周班次导出到日历';
+  }
+}
+
+async function toggleCalSwitch() {
+  if (!state.days.length) {
+    toast('先导入排班表');
+    paintCalSwitch();
+    return;
+  }
+  if (calSwitchOn()) {
+    store.set(K.calOn, '');
+    paintCalSwitch();
+    toast('已关闭医生日历提醒（已导入日历的事件请在日历里手动删除）');
+    return;
+  }
+  const r = await exportCalendar();
+  store.set(K.calOn, r.ok ? calWeekKey() : '');
+  paintCalSwitch();
 }
 
 // ---------- 杂项 UI ----------
@@ -628,6 +709,7 @@ function setKind(kind) {
   $('personSearch').style.display = '';
   $('btnShareReporter').style.display = 'none';
   $('btnCalendarReporter').style.display = 'none';
+  setCalStatus('');
 }
 
 // ---------- 整周分享成一张图 ----------
@@ -1026,6 +1108,7 @@ async function init() {
   loadCachedWeek();
   refreshFileStatus();
   setKind(state.kind);
+  paintCalSwitch();
   $('nameInput').value = store.get(K.name, '');
   $('leadInput').value = store.get(K.lead, '30');
 
@@ -1040,10 +1123,11 @@ async function init() {
   $('pickReporter').onclick = () => importAs('reporter');
   $('btnQuery').onclick = onQuery;
   $('nameInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') onQuery(); });
-  $('btnCalendar').onclick = exportCalendar;
-  // 首页「医生日历」入口：只导出首页这一周的医生班次（报告员的在结果弹窗里单独导出）
-  $('btnCalendarTop').onclick = () => exportCalendar();
-  $('btnCalendarReporter').onclick = () => exportCalendar(state.reporterShiftDays || []);
+  // 注意别把 click 事件当参数传进去（会被当成 days），一定要包一层
+  $('btnCalendar').onclick = () => exportCalendar();
+  // 首页「医生日历提醒」：开关样式，只导出首页这一周的医生班次（报告员在结果弹窗里单独导出）
+  $('calSw').onclick = toggleCalSwitch;
+  $('btnCalendarReporter').onclick = () => exportCalendar(state.reporterShiftDays || [], { inline: true });
   $('btnShare').onclick = shareWeekImage;
   $('btnShareReporter').onclick = shareReporterImage;
   document.querySelectorAll('#setThemeSeg button').forEach((b) => {
@@ -1140,6 +1224,7 @@ async function init() {
     reporterShare = null;
     $('btnShareReporter').style.display = 'none';
     $('btnCalendarReporter').style.display = 'none';
+    setCalStatus('');
   };
   $('btnRooms').onclick = openRooms;
   $('btnCloseRooms').onclick = () => $('dlgRooms').close();
@@ -1441,5 +1526,5 @@ function loadCachedWeek() {
 }
 
 self.__APP_VERSION__ = APP_VERSION;
-self.__APP_BUILD__ = '2026-10-24T10:20:15';
+self.__APP_BUILD__ = '2026-10-24T10:37:38';
 document.addEventListener('DOMContentLoaded', init);
