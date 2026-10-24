@@ -1,8 +1,8 @@
 // 查班小助手 PWA —— 主逻辑
 // 解析全部在本地完成（js/xlsx.js、js/xls.js、js/parser.js、js/rooms.js），数据只存 localStorage。
 
-import { fetchWeather } from './weather.js?v=2026-10-24T10%3A37%3A38';
-import { buildTips } from './tips.js?v=2026-10-24T10%3A37%3A38';
+import { fetchWeather } from './weather.js?v=2026-10-24T11%3A17%3A32';
+import { buildTips } from './tips.js?v=2026-10-24T11%3A17%3A32';
 
 const K = {
   doctorRows: 'sa.doctorRows',
@@ -39,7 +39,7 @@ const TYPE_STYLE_DARK = {
 const $ = (id) => document.getElementById(id);
 
 // 版本跟进：网页版与安卓正式版保持同一个版本号，构建戳只用于判断“网页有没有更新”。
-const APP_VERSION = '3.21';
+const APP_VERSION = '3.22';
 const ANDROID_VERSION = '3.14';
 // 安卓安装包直链：COS 不允许 .apk 后缀，.bin 就是 APK 本体，Content-Disposition 会还原文件名。
 const ANDROID_APK_URL =
@@ -180,10 +180,10 @@ async function loadModules() {
       return false;
     }
   };
-  await load('xlsx', './xlsx.js?v=2026-10-24T10%3A37%3A38');
-  await load('xls', './xls.js?v=2026-10-24T10%3A37%3A38');
-  await load('parser', './parser.js?v=2026-10-24T10%3A37%3A38');
-  await load('rooms', './rooms.js?v=2026-10-24T10%3A37%3A38');
+  await load('xlsx', './xlsx.js?v=2026-10-24T11%3A17%3A32');
+  await load('xls', './xls.js?v=2026-10-24T11%3A17%3A32');
+  await load('parser', './parser.js?v=2026-10-24T11%3A17%3A32');
+  await load('rooms', './rooms.js?v=2026-10-24T11%3A17%3A32');
   if (!mod.parser) {
     toast('解析模块未就绪，页面仍可打开');
   }
@@ -425,6 +425,7 @@ async function pickPerson(names, onPick, title) {
   $('btnCalendarReporter').style.display = 'none';
   $('personTitle').textContent = title || '查谁的班';
   setCalStatus('');
+  $('repLeadLine').hidden = true;
   $('personSearch').value = '';
   $('personSearch').style.display = '';
   const listEl = $('personList');
@@ -519,6 +520,7 @@ function showReporterWeek(name, days) {
   reporterShare = { name, days: days || [] };
   $('personTitle').textContent = name + ' · 本周';
   setCalStatus('');
+  $('repLeadLine').hidden = !(days && days.length);
   $('personSearch').style.display = 'none';
   const hasDays = days && days.length;
   $('btnCalendarReporter').style.display = hasDays ? '' : 'none';
@@ -660,12 +662,6 @@ function paintCalSwitch() {
   const on = calSwitchOn();
   const sw = $('calSw');
   if (sw) sw.setAttribute('aria-checked', on ? 'true' : 'false');
-  const hint = $('calRowHint');
-  if (hint) {
-    hint.textContent = on
-      ? '本周班次已导出，可再点一次更新'
-      : '打开后把本周班次导出到日历';
-  }
 }
 
 async function toggleCalSwitch() {
@@ -683,6 +679,64 @@ async function toggleCalSwitch() {
   const r = await exportCalendar();
   store.set(K.calOn, r.ok ? calWeekKey() : '');
   paintCalSwitch();
+}
+
+// ---------- 提前多久提醒（首页 / 报告员弹窗 / 设置共用） ----------
+const LEAD_PRESETS = [0, 5, 10, 15, 20, 30, 45, 60, 90, 120];
+
+function leadText(minutes) {
+  return minutes === 0 ? '准时提醒' : `提前 ${minutes} 分钟`;
+}
+
+function currentLead() {
+  const v = Number(store.get(K.lead, '30'));
+  return Math.max(0, Math.min(240, Number.isFinite(v) ? v : 30));
+}
+
+/** 三处的文案一起刷，省得改了首页设置里还是旧数字。 */
+function paintLead() {
+  const lead = currentLead();
+  const text = leadText(lead);
+  if ($('calLead')) $('calLead').textContent = text;
+  if ($('repLead')) $('repLead').textContent = text;
+  if ($('setLead')) $('setLead').textContent = text + ' ›';
+  if ($('leadInput')) $('leadInput').value = String(lead);
+  document.querySelectorAll('#leadPresets button').forEach((b) => {
+    b.classList.toggle('on', Number(b.dataset.min) === lead);
+  });
+}
+
+function buildLeadPresets() {
+  const box = $('leadPresets');
+  if (!box) return;
+  box.innerHTML = '';
+  for (const m of LEAD_PRESETS) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.dataset.min = String(m);
+    b.textContent = m === 0 ? '准时' : `${m} 分钟`;
+    b.onclick = () => saveLead(m);
+    box.appendChild(b);
+  }
+}
+
+function openLeadDialog() {
+  paintLead();
+  $('dlgLead').showModal();
+}
+
+async function saveLead(minutes) {
+  const lead = Math.max(0, Math.min(240, Number(minutes) || 0));
+  store.set(K.lead, String(lead));
+  paintLead();
+  if ($('dlgLead').open) $('dlgLead').close();
+  toast(lead === 0 ? '已改为：上班那一刻提醒' : `已改为：上班前 ${lead} 分钟提醒`);
+  // 报告员弹窗开着时，提醒时间要重新导出一次才生效，直接在弹窗里说清楚
+  if ($('dlgPerson') && $('dlgPerson').open && (state.reporterShiftDays || []).length) {
+    setCalStatus('提醒时间已改，点「写入日历」重新生成一次才会生效', 'none');
+  }
+  // 提醒时间参与班次解析（preTime），改完重算一次首页
+  if (state.days.length) await renderWeek({ keepName: true });
 }
 
 // ---------- 杂项 UI ----------
@@ -709,6 +763,7 @@ function setKind(kind) {
   $('personSearch').style.display = '';
   $('btnShareReporter').style.display = 'none';
   $('btnCalendarReporter').style.display = 'none';
+  $('repLeadLine').hidden = true;
   setCalStatus('');
 }
 
@@ -1139,14 +1194,14 @@ async function init() {
   $('btnWeather').onclick = () => ensureWeather(state.days, true).then(() => {
     if (state.days.length) toast('天气已刷新');
   });
-  $('btnSaveLead').onclick = async () => {
-    const lead = Math.max(0, Math.min(240, Number($('leadInput').value) || 30));
-    store.set(K.lead, String(lead));
-    $('leadInput').value = lead;
-    refreshFileStatus();
-    toast('已保存：上班前 ' + lead + ' 分钟提醒');
-    await renderWeek();
-  };
+  $('btnSaveLead').onclick = () => saveLead($('leadInput').value);
+  $('btnCloseLead').onclick = () => $('dlgLead').close();
+  // 首页日历行、报告员弹窗、设置里那一行，点哪都开同一个选择器
+  $('calLead').onclick = openLeadDialog;
+  $('repLead').onclick = openLeadDialog;
+  $('rowLead').onclick = openLeadDialog;
+  buildLeadPresets();
+  paintLead();
   $('btnSettings').onclick = () => {
     refreshFileStatus();
     $('setVersion').textContent = appVersionLabel() + ' ›';
@@ -1224,6 +1279,7 @@ async function init() {
     reporterShare = null;
     $('btnShareReporter').style.display = 'none';
     $('btnCalendarReporter').style.display = 'none';
+    $('repLeadLine').hidden = true;
     setCalStatus('');
   };
   $('btnRooms').onclick = openRooms;
@@ -1526,5 +1582,5 @@ function loadCachedWeek() {
 }
 
 self.__APP_VERSION__ = APP_VERSION;
-self.__APP_BUILD__ = '2026-10-24T10:37:38';
+self.__APP_BUILD__ = '2026-10-24T11:17:32';
 document.addEventListener('DOMContentLoaded', init);
