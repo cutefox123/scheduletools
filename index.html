@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<!-- build:2026-10-24T11:17:32 -->
+<!-- build:2026-10-24T11:41:32 -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
 <title>查班小助手</title>
@@ -31,7 +31,7 @@
 <meta name="format-detection" content="telephone=no">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon-192.png" sizes="192x192">
-<link rel="stylesheet" href="styles.css?v=2026-10-24T11%3A17%3A32">
+<link rel="stylesheet" href="styles.css?v=2026-10-24T11%3A41%3A32">
 </head>
 <body>
 <div id="app">
@@ -69,10 +69,10 @@
       </div>
     </div>
 
-    <!-- 医生日历提醒：开关样式 + 提前多久提醒 -->
+    <!-- 医生日历提醒：点开关打开时，先问「提前多久」再导出 -->
     <div class="cal-row">
       <span class="cal-row-label">医生日历提醒</span>
-      <button id="calLead" class="cal-lead" type="button" title="改提醒提前时间">提前 30 分钟</button>
+      <span class="cal-row-hint" id="calRowHint">开启时选提前多久</span>
       <button id="calSw" class="switch" type="button" role="switch" aria-checked="false"
               aria-label="医生日历提醒" title="医生日历提醒">
         <span class="switch-knob"></span>
@@ -140,16 +140,16 @@
 <!-- 提前多久提醒（首页 / 报告员弹窗 / 设置共用） -->
 <dialog id="dlgLead">
   <h3>提前多久提醒</h3>
-  <p class="dlg-sub">对医生和报告员的日历都生效</p>
+  <p class="dlg-sub" id="dlgLeadSub">对医生和报告员的日历都生效，最长 1 小时</p>
   <div class="lead-presets" id="leadPresets"></div>
   <div class="row">
     <span>自定义</span>
-    <input id="leadInput" type="number" inputmode="numeric" min="0" max="240" value="30">
+    <input id="leadInput" type="number" inputmode="numeric" min="0" max="60" value="30">
     <span>分钟</span>
-    <button id="btnSaveLead" class="btn-primary sm">保存</button>
+    <button id="btnSaveLead" class="btn-primary sm">就用这个</button>
   </div>
   <div class="dlg-actions">
-    <button id="btnCloseLead" class="btn-ghost solid" type="button">关闭</button>
+    <button id="btnCloseLead" class="btn-ghost solid" type="button">取消</button>
   </div>
 </dialog>
 
@@ -169,10 +169,7 @@
 
   <div class="set-section">
     <div class="set-title">提醒与日历</div>
-    <div class="set-row" id="rowLead" role="button" tabindex="0">
-      <span>上班前提醒</span><b id="setLead">提前 30 分钟 ›</b>
-    </div>
-    <p class="hint" id="calHint">开关在首页「医生日历提醒」。导出会生成 .ics，用系统日历打开添加，到点由日历提醒。</p>
+    <p class="hint" id="calHint">开关和提醒时间都在首页「医生日历提醒」。导出会生成 .ics，用系统日历打开添加，到点由日历提醒。</p>
     <div class="dlg-actions">
       <button id="btnCalendar" class="btn-ghost solid" type="button">导出到日历</button>
       <button id="btnWeather" class="btn-ghost solid" type="button">刷新天气 ⟳</button>
@@ -291,6 +288,6 @@
 
 <input id="filePicker" type="file" accept=".xlsx,.xls,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
 
-<script type="module" src="app.js?v=2026-10-24T11%3A17%3A32"></script>
+<script type="module" src="app.js?v=2026-10-24T11%3A41%3A32"></script>
 </body>
 </html>

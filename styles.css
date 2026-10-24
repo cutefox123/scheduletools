@@ -143,22 +143,17 @@ html, body {
   font-weight: 600;
 }
 
-/* 首页日历行里的「提前 N 分钟」按钮 */
-.cal-lead {
-  margin-left: auto;
-  flex: 0 0 auto;
-  border: none;
-  background: rgba(255, 255, 255, .14);
-  color: #fff;
-  font-family: inherit;
-  font-size: 11.5px;
-  font-weight: 600;
-  padding: 5px 9px;
-  border-radius: 9px;
+/* 首页日历行右侧的状态小字 */
+.cal-row-hint {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: right;
+  font-size: 11px;
+  opacity: .72;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-
-.cal-lead:active { background: rgba(255, 255, 255, .26); }
 
 /* 报告员弹窗里的提醒行 */
 .rep-lead {
@@ -201,8 +196,6 @@ html, body {
   border-color: var(--brand);
   color: #fff;
 }
-
-#rowLead { cursor: pointer; }
 
 .switch {
   position: relative;
