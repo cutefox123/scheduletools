@@ -230,6 +230,64 @@ html, body {
   background: var(--brand-on-light);
 }
 
+/* 报告员弹窗里的「日历提醒」开关行（和首页那条同结构，浅底配色） */
+.rep-cal {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0 0;
+  padding: 6px 6px 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: var(--input);
+}
+
+.rep-cal[data-on="true"] {
+  border-color: var(--brand);
+  background: color-mix(in srgb, var(--brand) 8%, transparent);
+}
+
+.rep-cal-label {
+  flex: 0 0 auto;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.rep-cal-hint {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: right;
+  font-size: 11px;
+  color: var(--sub);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rep-cal[data-on="true"] .rep-cal-label,
+.rep-cal[data-on="true"] .rep-cal-hint { color: var(--brand); }
+
+/* 浅底上的开关：白滑块 + 品牌色轨道 */
+.switch.switch-light {
+  border-color: var(--border);
+  background: #fff;
+}
+
+.switch.switch-light .switch-knob {
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(20, 30, 60, .22);
+}
+
+.switch.switch-light[aria-checked="true"] {
+  background: var(--brand);
+  border-color: var(--brand);
+}
+
+.switch.switch-light[aria-checked="true"] .switch-knob {
+  background: #fff;
+  box-shadow: none;
+}
+
 .icon-btn {
   position: relative;
   display: grid;

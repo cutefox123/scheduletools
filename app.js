@@ -1,8 +1,8 @@
 // 查班小助手 PWA —— 主逻辑
 // 解析全部在本地完成（js/xlsx.js、js/xls.js、js/parser.js、js/rooms.js），数据只存 localStorage。
 
-import { fetchWeather } from './weather.js?v=2026-10-24T11%3A41%3A32';
-import { buildTips } from './tips.js?v=2026-10-24T11%3A41%3A32';
+import { fetchWeather } from './weather.js?v=2026-10-24T11%3A51%3A20';
+import { buildTips } from './tips.js?v=2026-10-24T11%3A51%3A20';
 
 const K = {
   doctorRows: 'sa.doctorRows',
@@ -17,6 +17,7 @@ const K = {
   weatherAt: 'sa.weatherAt',
   theme: 'sa.theme',
   calOn: 'sa.calOn', // 首页「医生日历提醒」开关：记本周（周一日期），换周自动算关闭
+  repCalKey: 'sa.repCalKey', // 报告员开关：记「姓名|首日」，换人/换周自动关闭
 };
 
 const TYPE_STYLE = {
@@ -39,7 +40,7 @@ const TYPE_STYLE_DARK = {
 const $ = (id) => document.getElementById(id);
 
 // 版本跟进：网页版与安卓正式版保持同一个版本号，构建戳只用于判断“网页有没有更新”。
-const APP_VERSION = '3.23';
+const APP_VERSION = '3.24';
 const ANDROID_VERSION = '3.14';
 // 安卓安装包直链：COS 不允许 .apk 后缀，.bin 就是 APK 本体，Content-Disposition 会还原文件名。
 const ANDROID_APK_URL =
@@ -180,10 +181,10 @@ async function loadModules() {
       return false;
     }
   };
-  await load('xlsx', './xlsx.js?v=2026-10-24T11%3A41%3A32');
-  await load('xls', './xls.js?v=2026-10-24T11%3A41%3A32');
-  await load('parser', './parser.js?v=2026-10-24T11%3A41%3A32');
-  await load('rooms', './rooms.js?v=2026-10-24T11%3A41%3A32');
+  await load('xlsx', './xlsx.js?v=2026-10-24T11%3A51%3A20');
+  await load('xls', './xls.js?v=2026-10-24T11%3A51%3A20');
+  await load('parser', './parser.js?v=2026-10-24T11%3A51%3A20');
+  await load('rooms', './rooms.js?v=2026-10-24T11%3A51%3A20');
   if (!mod.parser) {
     toast('解析模块未就绪，页面仍可打开');
   }
@@ -422,10 +423,9 @@ async function pickPerson(names, onPick, title) {
   const dlg = $('dlgPerson');
   reporterShare = null;
   $('btnShareReporter').style.display = 'none';
-  $('btnCalendarReporter').style.display = 'none';
   $('personTitle').textContent = title || '查谁的班';
   setCalStatus('');
-  $('repLeadLine').hidden = true;
+  setRepCalVisible(false);
   $('personSearch').value = '';
   $('personSearch').style.display = '';
   const listEl = $('personList');
@@ -520,10 +520,9 @@ function showReporterWeek(name, days) {
   reporterShare = { name, days: days || [] };
   $('personTitle').textContent = name + ' · 本周';
   setCalStatus('');
-  $('repLeadLine').hidden = !(days && days.length);
   $('personSearch').style.display = 'none';
   const hasDays = days && days.length;
-  $('btnCalendarReporter').style.display = hasDays ? '' : 'none';
+  setRepCalVisible(!!hasDays);
   $('btnShareReporter').style.display = hasDays ? '' : 'none';
   const listEl = $('personList');
   listEl.innerHTML = '';
@@ -708,12 +707,13 @@ function currentLead() {
 function paintLead() {
   const lead = currentLead();
   const text = leadText(lead);
-  if ($('repLead')) $('repLead').textContent = text;
   if ($('leadInput')) $('leadInput').value = String(lead);
   document.querySelectorAll('#leadPresets button').forEach((b) => {
     b.classList.toggle('on', Number(b.dataset.min) === lead);
   });
   paintCalSwitch();
+  const repRow = $('repCalRow');
+  if (repRow && !repRow.hidden) paintRepCal();
 }
 
 function buildLeadPresets() {
@@ -777,6 +777,60 @@ async function saveLead(minutes) {
   if (state.days.length) await renderWeek({ keepName: true });
 }
 
+// ---------- 报告员弹窗里的日历开关（和首页医生那个同一套逻辑） ----------
+function repCalKey() {
+  const days = (reporterShare && reporterShare.days) || [];
+  const name = (reporterShare && reporterShare.name) || '';
+  const first = days.find((d) => d && d.ymd);
+  return first && name ? `${name}|${first.ymd}` : '';
+}
+
+function repCalOn() {
+  const key = repCalKey();
+  return !!key && store.get(K.repCalKey, '') === key;
+}
+
+function paintRepCal() {
+  const row = $('repCalRow');
+  if (!row) return;
+  const on = repCalOn();
+  row.dataset.on = on ? 'true' : 'false';
+  const sw = $('repCalSw');
+  if (sw) sw.setAttribute('aria-checked', on ? 'true' : 'false');
+  const hint = $('repCalHint');
+  if (hint) hint.textContent = on ? leadText(currentLead()) : '打开时选提前多久';
+}
+
+function setRepCalVisible(v) {
+  const row = $('repCalRow');
+  if (row) row.hidden = !v;
+  if (v) paintRepCal();
+}
+
+async function toggleRepCal() {
+  const days = (reporterShare && reporterShare.days) || [];
+  if (!days.length) {
+    setCalStatus('这个人这一周还没有排班数据', 'none');
+    return;
+  }
+  if (repCalOn()) {
+    // 网页版删不掉已经导入系统日历的事件，只能清标记并说清楚
+    store.set(K.repCalKey, '');
+    paintRepCal();
+    setCalStatus('已关闭日历提醒（已导入到日历的事件请在日历里手动删除）', 'none');
+    return;
+  }
+  // 打开前先问「提前多久」，取消就不导出
+  const lead = await askLead('开启日历提醒前，先定一下提前多久通知你（最长 1 小时）');
+  if (lead === null) {
+    paintRepCal();
+    return;
+  }
+  const r = await exportCalendar(days, { inline: true });
+  store.set(K.repCalKey, r.ok ? repCalKey() : '');
+  paintRepCal();
+}
+
 // ---------- 杂项 UI ----------
 function refreshFileStatus() {
   const doc = store.get(K.doctorFile, '');
@@ -800,8 +854,7 @@ function setKind(kind) {
   // 报告员模式下恢复输入框（可能被“报告员一周”复用）
   $('personSearch').style.display = '';
   $('btnShareReporter').style.display = 'none';
-  $('btnCalendarReporter').style.display = 'none';
-  $('repLeadLine').hidden = true;
+  setRepCalVisible(false);
   setCalStatus('');
 }
 
@@ -1220,7 +1273,7 @@ async function init() {
   $('btnCalendar').onclick = () => exportCalendar();
   // 首页「医生日历提醒」：开关样式，只导出首页这一周的医生班次（报告员在结果弹窗里单独导出）
   $('calSw').onclick = toggleCalSwitch;
-  $('btnCalendarReporter').onclick = () => exportCalendar(state.reporterShiftDays || [], { inline: true });
+  $('repCalSw').onclick = toggleRepCal;
   $('btnShare').onclick = shareWeekImage;
   $('btnShareReporter').onclick = shareReporterImage;
   document.querySelectorAll('#setThemeSeg button').forEach((b) => {
@@ -1236,8 +1289,7 @@ async function init() {
   $('btnCloseLead').onclick = () => closeLeadDialog(null);
   // 关掉弹窗（含 ESC / 点外部）都当取消，别让开关流程一直等
   $('dlgLead').addEventListener('close', () => closeLeadDialog(null));
-  // 报告员弹窗里那行提醒时间，还是点开同一个选择器
-  $('repLead').onclick = () => openLeadDialog();
+  // 报告员弹窗的开关自己处理（会先弹提醒时间）
   buildLeadPresets();
   paintLead();
   $('btnSettings').onclick = () => {
@@ -1316,8 +1368,7 @@ async function init() {
     $('dlgPerson').close();
     reporterShare = null;
     $('btnShareReporter').style.display = 'none';
-    $('btnCalendarReporter').style.display = 'none';
-    $('repLeadLine').hidden = true;
+    setRepCalVisible(false);
     setCalStatus('');
   };
   $('btnRooms').onclick = openRooms;
@@ -1620,5 +1671,5 @@ function loadCachedWeek() {
 }
 
 self.__APP_VERSION__ = APP_VERSION;
-self.__APP_BUILD__ = '2026-10-24T11:41:32';
+self.__APP_BUILD__ = '2026-10-24T11:51:20';
 document.addEventListener('DOMContentLoaded', init);

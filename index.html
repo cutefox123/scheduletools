@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<!-- build:2026-10-24T11:41:32 -->
+<!-- build:2026-10-24T11:51:20 -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
 <title>查班小助手</title>
@@ -31,7 +31,7 @@
 <meta name="format-detection" content="telephone=no">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon-192.png" sizes="192x192">
-<link rel="stylesheet" href="styles.css?v=2026-10-24T11%3A41%3A32">
+<link rel="stylesheet" href="styles.css?v=2026-10-24T11%3A51%3A20">
 </head>
 <body>
 <div id="app">
@@ -128,10 +128,16 @@
   <h3 id="personTitle">查谁的班</h3>
   <input id="personSearch" type="search" placeholder="搜索姓名" autocomplete="off">
   <div id="personList" class="person-list"></div>
-  <p class="rep-lead" id="repLeadLine" hidden>提醒：<button id="repLead" class="link-btn" type="button">提前 30 分钟</button>（写入日历后生效）</p>
+  <div class="rep-cal" id="repCalRow" data-on="false" hidden>
+    <span class="rep-cal-label">日历提醒</span>
+    <span class="rep-cal-hint" id="repCalHint">打开时选提前多久</span>
+    <button id="repCalSw" class="switch switch-light" type="button" role="switch"
+            aria-checked="false" aria-label="报告员日历提醒" title="报告员日历提醒">
+      <span class="switch-knob"></span>
+    </button>
+  </div>
   <p class="cal-status" id="calStatus" hidden></p>
   <div class="dlg-actions">
-    <button id="btnCalendarReporter" class="btn-primary" type="button" style="display:none">写入日历</button>
     <button id="btnShareReporter" class="btn-primary" type="button" style="display:none">分享</button>
     <button id="btnClosePerson" class="btn-ghost solid">关闭</button>
   </div>
@@ -288,6 +294,6 @@
 
 <input id="filePicker" type="file" accept=".xlsx,.xls,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
 
-<script type="module" src="app.js?v=2026-10-24T11%3A41%3A32"></script>
+<script type="module" src="app.js?v=2026-10-24T11%3A51%3A20"></script>
 </body>
 </html>
