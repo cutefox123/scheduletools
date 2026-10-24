@@ -1,8 +1,8 @@
 // 查班小助手 PWA —— 主逻辑
 // 解析全部在本地完成（js/xlsx.js、js/xls.js、js/parser.js、js/rooms.js），数据只存 localStorage。
 
-import { fetchWeather } from './weather.js?v=2026-10-24T09%3A47%3A25';
-import { buildTips } from './tips.js?v=2026-10-24T09%3A47%3A25';
+import { fetchWeather } from './weather.js?v=2026-10-24T10%3A03%3A02';
+import { buildTips } from './tips.js?v=2026-10-24T10%3A03%3A02';
 
 const K = {
   doctorRows: 'sa.doctorRows',
@@ -38,7 +38,7 @@ const TYPE_STYLE_DARK = {
 const $ = (id) => document.getElementById(id);
 
 // 版本跟进：网页版与安卓正式版保持同一个版本号，构建戳只用于判断“网页有没有更新”。
-const APP_VERSION = '3.18';
+const APP_VERSION = '3.19';
 const ANDROID_VERSION = '3.14';
 // 安卓安装包直链：COS 不允许 .apk 后缀，.bin 就是 APK 本体，Content-Disposition 会还原文件名。
 const ANDROID_APK_URL =
@@ -179,10 +179,10 @@ async function loadModules() {
       return false;
     }
   };
-  await load('xlsx', './xlsx.js?v=2026-10-24T09%3A47%3A25');
-  await load('xls', './xls.js?v=2026-10-24T09%3A47%3A25');
-  await load('parser', './parser.js?v=2026-10-24T09%3A47%3A25');
-  await load('rooms', './rooms.js?v=2026-10-24T09%3A47%3A25');
+  await load('xlsx', './xlsx.js?v=2026-10-24T10%3A03%3A02');
+  await load('xls', './xls.js?v=2026-10-24T10%3A03%3A02');
+  await load('parser', './parser.js?v=2026-10-24T10%3A03%3A02');
+  await load('rooms', './rooms.js?v=2026-10-24T10%3A03%3A02');
   if (!mod.parser) {
     toast('解析模块未就绪，页面仍可打开');
   }
@@ -468,7 +468,15 @@ async function queryReporter(name) {
   if (!doctorRows) { toast('还没导入医生排班表'); return; }
   const res = mod.parser.reporterWeek(doctorRows, rep, hit);
   if (!res.ok) { toast(res.error || '查不到'); return; }
-  const repDays = reporterShiftDays(rep, hit);
+  // 日历班次直接用弹窗上显示的这一周拼（日期来自医生表的周），
+  // 保证「页面看到什么就写什么」，不再另算一份日期。
+  const repDays = (res.days || []).map((d) => {
+    const raw = reporterRawText((d.am && d.am.place ? d.am.place : '') + '/'
+      + (d.pm && d.pm.place ? d.pm.place : ''));
+    const o = { ymd: d.ymd, raw, type: 'REST', startTime: null, preTime: null, workInfo: '' };
+    try { mod.parser.fillShift(o, raw, 0); } catch { /* 解析失败按休息 */ }
+    return o;
+  });
   state.reporterName = hit;
   state.reporterShiftDays = repDays;
   showReporterWeek(hit, res.days);
@@ -1475,5 +1483,5 @@ function loadCachedWeek() {
 }
 
 self.__APP_VERSION__ = APP_VERSION;
-self.__APP_BUILD__ = '2026-10-24T09:47:25';
+self.__APP_BUILD__ = '2026-10-24T10:03:02';
 document.addEventListener('DOMContentLoaded', init);
