@@ -1173,12 +1173,22 @@ export function reporterWeek(doctorMatrix, repResult, name) {
   }
 
   const labels = dayLabelsOf(h);
-  const out = labels.map((l) => ({
-    weekLabel: l.weekLabel,
-    dateLabel: l.dateLabel,
-    am: { place: '', partners: [] },
-    pm: { place: '', partners: [] },
-  }));
+  // 每一天带上 ymd 和报告员原始格子文本（raw）：
+  // 「写入日历」要靠这两个字段算上下班时间——早先这里没有 ymd，
+  // 导出时整周都被跳过，导出的日历文件里一条事件都没有。
+  const out = labels.map((l, i) => {
+    const dc = h.dateCols[i];
+    const date = dc == null ? null
+      : (dc.fullDate != null ? dc.fullDate : safeDate(h.resolvedYear, dc.month, dc.day));
+    return {
+      ymd: date == null ? null : isoDate(date),
+      weekLabel: l.weekLabel,
+      dateLabel: l.dateLabel,
+      raw: '',
+      am: { place: '', partners: [] },
+      pm: { place: '', partners: [] },
+    };
+  });
   result.days = out;
 
   let entry = null;
@@ -1198,6 +1208,11 @@ export function reporterWeek(doctorMatrix, repResult, name) {
   if (entry.cells != null) {
     const n = Math.min(h.dateCols.length, out.length, entry.cells.length);
     for (let i = 0; i < n; i++) {
+      // 原始格子文本（"4/6"→"4诊/6诊"），写日历算班次时间靠它
+      const cell = entry.cells[i] == null ? '' : String(entry.cells[i]).replace(/\s+/g, '');
+      out[i].raw = cell.split('/')
+        .map((p) => (/^\d+$/.test(p) ? p + '诊' : p))
+        .join('/');
       out[i].am.place = halfOf(entry.cells[i], 0);
       out[i].pm.place = halfOf(entry.cells[i], 1);
     }

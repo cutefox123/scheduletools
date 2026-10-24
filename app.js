@@ -1,8 +1,8 @@
 // 查班小助手 PWA —— 主逻辑
 // 解析全部在本地完成（js/xlsx.js、js/xls.js、js/parser.js、js/rooms.js），数据只存 localStorage。
 
-import { fetchWeather } from './weather.js?v=2026-10-24T10%3A03%3A02';
-import { buildTips } from './tips.js?v=2026-10-24T10%3A03%3A02';
+import { fetchWeather } from './weather.js?v=2026-10-24T10%3A20%3A15';
+import { buildTips } from './tips.js?v=2026-10-24T10%3A20%3A15';
 
 const K = {
   doctorRows: 'sa.doctorRows',
@@ -38,7 +38,7 @@ const TYPE_STYLE_DARK = {
 const $ = (id) => document.getElementById(id);
 
 // 版本跟进：网页版与安卓正式版保持同一个版本号，构建戳只用于判断“网页有没有更新”。
-const APP_VERSION = '3.19';
+const APP_VERSION = '3.20';
 const ANDROID_VERSION = '3.14';
 // 安卓安装包直链：COS 不允许 .apk 后缀，.bin 就是 APK 本体，Content-Disposition 会还原文件名。
 const ANDROID_APK_URL =
@@ -179,10 +179,10 @@ async function loadModules() {
       return false;
     }
   };
-  await load('xlsx', './xlsx.js?v=2026-10-24T10%3A03%3A02');
-  await load('xls', './xls.js?v=2026-10-24T10%3A03%3A02');
-  await load('parser', './parser.js?v=2026-10-24T10%3A03%3A02');
-  await load('rooms', './rooms.js?v=2026-10-24T10%3A03%3A02');
+  await load('xlsx', './xlsx.js?v=2026-10-24T10%3A20%3A15');
+  await load('xls', './xls.js?v=2026-10-24T10%3A20%3A15');
+  await load('parser', './parser.js?v=2026-10-24T10%3A20%3A15');
+  await load('rooms', './rooms.js?v=2026-10-24T10%3A20%3A15');
   if (!mod.parser) {
     toast('解析模块未就绪，页面仍可打开');
   }
@@ -452,7 +452,6 @@ async function onQuery() {
   store.set(K.name, name);
   await renderWeek();
   toast('已切换到「' + name + '」');
-  maybeAskCalendar('doctor', name, state.days);
 }
 
 async function queryReporter(name) {
@@ -468,11 +467,11 @@ async function queryReporter(name) {
   if (!doctorRows) { toast('还没导入医生排班表'); return; }
   const res = mod.parser.reporterWeek(doctorRows, rep, hit);
   if (!res.ok) { toast(res.error || '查不到'); return; }
-  // 日历班次直接用弹窗上显示的这一周拼（日期来自医生表的周），
-  // 保证「页面看到什么就写什么」，不再另算一份日期。
+  // 日历班次直接用弹窗上显示的这一周拼（日期和原始格子文本都来自同一处），
+  // 保证「页面看到什么就写什么」。raw 必须是"4诊/6诊"这种格子文本，
+  // 用位置名（"东区/西区"）算不出上下班时间，写出来是 0 条。
   const repDays = (res.days || []).map((d) => {
-    const raw = reporterRawText((d.am && d.am.place ? d.am.place : '') + '/'
-      + (d.pm && d.pm.place ? d.pm.place : ''));
+    const raw = d.raw || '';
     const o = { ymd: d.ymd, raw, type: 'REST', startTime: null, preTime: null, workInfo: '' };
     try { mod.parser.fillShift(o, raw, 0); } catch { /* 解析失败按休息 */ }
     return o;
@@ -480,13 +479,6 @@ async function queryReporter(name) {
   state.reporterName = hit;
   state.reporterShiftDays = repDays;
   showReporterWeek(hit, res.days);
-  // 弹窗关掉后再无感问一次「生成日历提醒」，一周一人只问一次
-  const dlg = $('dlgPerson');
-  const onClose = () => {
-    dlg.removeEventListener('close', onClose);
-    maybeAskCalendar('reporter', hit, repDays);
-  };
-  dlg.addEventListener('close', onClose);
 }
 
 // ---------- 报告员周 → 日历班次（与安卓侧同一套规则） ----------
@@ -514,45 +506,9 @@ function reporterShiftDays(rep, hit) {
   return days;
 }
 
-/** 查询完的无感询问：底部小条轻轻问一次，写入/暂不/自动消失都算问过。 */
-function maybeAskCalendar(kind, name, days) {
-  const first = (days || []).find((d) => d.ymd)?.ymd || '';
-  if (!first) return;
-  const key = kind + '|' + name + '|' + first;
-  if (store.get('sa.calAskKey', '') === key) return;
-  const upcoming = (days || []).some((d) =>
-    d.startTime && d.type !== 'REST' && d.type !== 'OFF_NIGHT' && d.ymd >= todayStr());
-  if (!upcoming) return;
-  store.set('sa.calAskKey', key);
-  const who = kind === 'reporter' ? '报告员' : '医生';
-  askCalendarBar('要把' + who + '「' + name + '」的本周班次生成日历提醒文件吗？', () => exportCalendar(days));
-}
-
 function todayStr() {
   const d = new Date();
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-}
-
-function askCalendarBar(text, onWrite) {
-  const bar = document.createElement('div');
-  bar.className = 'cal-ask';
-  const span = document.createElement('span');
-  span.className = 'cal-ask-text';
-  span.textContent = text;
-  const yes = document.createElement('button');
-  yes.type = 'button';
-  yes.className = 'cal-ask-yes';
-  yes.textContent = '写入';
-  const no = document.createElement('button');
-  no.type = 'button';
-  no.className = 'cal-ask-no';
-  no.textContent = '暂不';
-  const close = () => bar.remove();
-  yes.onclick = async () => { close(); await onWrite(); };
-  no.onclick = close;
-  bar.append(span, yes, no);
-  document.body.appendChild(bar);
-  setTimeout(close, 8000);
 }
 
 function showReporterWeek(name, days) {
@@ -1085,6 +1041,8 @@ async function init() {
   $('btnQuery').onclick = onQuery;
   $('nameInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') onQuery(); });
   $('btnCalendar').onclick = exportCalendar;
+  // 首页「医生日历」入口：只导出首页这一周的医生班次（报告员的在结果弹窗里单独导出）
+  $('btnCalendarTop').onclick = () => exportCalendar();
   $('btnCalendarReporter').onclick = () => exportCalendar(state.reporterShiftDays || []);
   $('btnShare').onclick = shareWeekImage;
   $('btnShareReporter').onclick = shareReporterImage;
@@ -1483,5 +1441,5 @@ function loadCachedWeek() {
 }
 
 self.__APP_VERSION__ = APP_VERSION;
-self.__APP_BUILD__ = '2026-10-24T10:03:02';
+self.__APP_BUILD__ = '2026-10-24T10:20:15';
 document.addEventListener('DOMContentLoaded', init);
