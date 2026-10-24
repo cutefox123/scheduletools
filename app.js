@@ -1,8 +1,8 @@
 // 查班小助手 PWA —— 主逻辑
 // 解析全部在本地完成（js/xlsx.js、js/xls.js、js/parser.js、js/rooms.js），数据只存 localStorage。
 
-import { fetchWeather } from './weather.js?v=2026-10-24T08%3A57%3A27';
-import { buildTips } from './tips.js?v=2026-10-24T08%3A57%3A27';
+import { fetchWeather } from './weather.js?v=2026-10-24T09%3A18%3A23';
+import { buildTips } from './tips.js?v=2026-10-24T09%3A18%3A23';
 
 const K = {
   doctorRows: 'sa.doctorRows',
@@ -38,7 +38,7 @@ const TYPE_STYLE_DARK = {
 const $ = (id) => document.getElementById(id);
 
 // 版本跟进：网页版与安卓正式版保持同一个版本号，构建戳只用于判断“网页有没有更新”。
-const APP_VERSION = '3.15';
+const APP_VERSION = '3.16';
 const ANDROID_VERSION = '3.14';
 // 安卓安装包直链：COS 不允许 .apk 后缀，.bin 就是 APK 本体，Content-Disposition 会还原文件名。
 const ANDROID_APK_URL =
@@ -87,6 +87,7 @@ let state = {
   days: [],
   reporterDays: null,   // 报告员查询结果
   reporterName: '',     // 最近一次查询的报告员姓名（日历导出用）
+  reporterShiftDays: [],// 最近一次查询的报告员班次（写入日历用）
   kind: store.get(K.kind, 'doctor'),
   weather: store.json(K.weather, {}),
   weatherAt: Number(store.get(K.weatherAt, '0')),
@@ -178,10 +179,10 @@ async function loadModules() {
       return false;
     }
   };
-  await load('xlsx', './xlsx.js?v=2026-10-24T08%3A57%3A27');
-  await load('xls', './xls.js?v=2026-10-24T08%3A57%3A27');
-  await load('parser', './parser.js?v=2026-10-24T08%3A57%3A27');
-  await load('rooms', './rooms.js?v=2026-10-24T08%3A57%3A27');
+  await load('xlsx', './xlsx.js?v=2026-10-24T09%3A18%3A23');
+  await load('xls', './xls.js?v=2026-10-24T09%3A18%3A23');
+  await load('parser', './parser.js?v=2026-10-24T09%3A18%3A23');
+  await load('rooms', './rooms.js?v=2026-10-24T09%3A18%3A23');
   if (!mod.parser) {
     toast('解析模块未就绪，页面仍可打开');
   }
@@ -419,6 +420,7 @@ async function pickPerson(names, onPick, title) {
   const dlg = $('dlgPerson');
   reporterShare = null;
   $('btnShareReporter').style.display = 'none';
+  $('btnCalendarReporter').style.display = 'none';
   $('personTitle').textContent = title || '查谁的班';
   $('personSearch').value = '';
   $('personSearch').style.display = '';
@@ -468,6 +470,7 @@ async function queryReporter(name) {
   if (!res.ok) { toast(res.error || '查不到'); return; }
   const repDays = reporterShiftDays(rep, hit);
   state.reporterName = hit;
+  state.reporterShiftDays = repDays;
   showReporterWeek(hit, res.days);
   // 弹窗关掉后再无感问一次「生成日历提醒」，一周一人只问一次
   const dlg = $('dlgPerson');
@@ -549,7 +552,9 @@ function showReporterWeek(name, days) {
   reporterShare = { name, days: days || [] };
   $('personTitle').textContent = name + ' · 本周';
   $('personSearch').style.display = 'none';
-  $('btnShareReporter').style.display = (days && days.length) ? '' : 'none';
+  const hasDays = days && days.length;
+  $('btnCalendarReporter').style.display = hasDays ? '' : 'none';
+  $('btnShareReporter').style.display = hasDays ? '' : 'none';
   const listEl = $('personList');
   listEl.innerHTML = '';
   for (const d of days) {
@@ -635,20 +640,6 @@ async function exportCalendar(daysOverride = null) {
   toast('已生成日历文件，在“文件”里点它会导入日历');
 }
 
-/** 主界面日历按钮：医生模式导出本周医生班次；报告员模式导出最近查询的报告员班次。 */
-async function exportCalendarTop() {
-  if (state.kind === 'reporter') {
-    const rows = store.json(K.reporterRows, null);
-    const rep = rows && mod.parser?.parseReporter ? mod.parser.parseReporter(rows) : null;
-    const hit = state.reporterName || '';
-    const days = hit && rep ? reporterShiftDays(rep, hit) : [];
-    if (!days.length) { toast('先查询一位报告员'); return; }
-    await exportCalendar(days);
-    return;
-  }
-  await exportCalendar();
-}
-
 // ---------- 杂项 UI ----------
 function refreshFileStatus() {
   const doc = store.get(K.doctorFile, '');
@@ -672,6 +663,7 @@ function setKind(kind) {
   // 报告员模式下恢复输入框（可能被“报告员一周”复用）
   $('personSearch').style.display = '';
   $('btnShareReporter').style.display = 'none';
+  $('btnCalendarReporter').style.display = 'none';
 }
 
 // ---------- 整周分享成一张图 ----------
@@ -1085,7 +1077,7 @@ async function init() {
   $('btnQuery').onclick = onQuery;
   $('nameInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') onQuery(); });
   $('btnCalendar').onclick = exportCalendar;
-  $('btnCalendarTop').onclick = exportCalendarTop;
+  $('btnCalendarReporter').onclick = () => exportCalendar(state.reporterShiftDays || []);
   $('btnShare').onclick = shareWeekImage;
   $('btnShareReporter').onclick = shareReporterImage;
   document.querySelectorAll('#setThemeSeg button').forEach((b) => {
@@ -1181,6 +1173,7 @@ async function init() {
     $('dlgPerson').close();
     reporterShare = null;
     $('btnShareReporter').style.display = 'none';
+    $('btnCalendarReporter').style.display = 'none';
   };
   $('btnRooms').onclick = openRooms;
   $('btnCloseRooms').onclick = () => $('dlgRooms').close();
@@ -1482,5 +1475,5 @@ function loadCachedWeek() {
 }
 
 self.__APP_VERSION__ = APP_VERSION;
-self.__APP_BUILD__ = '2026-10-24T08:57:27';
+self.__APP_BUILD__ = '2026-10-24T09:18:23';
 document.addEventListener('DOMContentLoaded', init);
