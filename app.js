@@ -1,8 +1,8 @@
 // 查班小助手 PWA —— 主逻辑
 // 解析全部在本地完成（js/xlsx.js、js/xls.js、js/parser.js、js/rooms.js），数据只存 localStorage。
 
-import { fetchWeather } from './weather.js?v=2026-10-23T13%3A06%3A29';
-import { buildTips } from './tips.js?v=2026-10-23T13%3A06%3A29';
+import { fetchWeather } from './weather.js?v=2026-10-24T08%3A57%3A27';
+import { buildTips } from './tips.js?v=2026-10-24T08%3A57%3A27';
 
 const K = {
   doctorRows: 'sa.doctorRows',
@@ -38,7 +38,7 @@ const TYPE_STYLE_DARK = {
 const $ = (id) => document.getElementById(id);
 
 // 版本跟进：网页版与安卓正式版保持同一个版本号，构建戳只用于判断“网页有没有更新”。
-const APP_VERSION = '3.14';
+const APP_VERSION = '3.15';
 const ANDROID_VERSION = '3.14';
 // 安卓安装包直链：COS 不允许 .apk 后缀，.bin 就是 APK 本体，Content-Disposition 会还原文件名。
 const ANDROID_APK_URL =
@@ -86,6 +86,7 @@ function invalidateReporter() { repCache = null; }
 let state = {
   days: [],
   reporterDays: null,   // 报告员查询结果
+  reporterName: '',     // 最近一次查询的报告员姓名（日历导出用）
   kind: store.get(K.kind, 'doctor'),
   weather: store.json(K.weather, {}),
   weatherAt: Number(store.get(K.weatherAt, '0')),
@@ -177,10 +178,10 @@ async function loadModules() {
       return false;
     }
   };
-  await load('xlsx', './xlsx.js?v=2026-10-23T13%3A06%3A29');
-  await load('xls', './xls.js?v=2026-10-23T13%3A06%3A29');
-  await load('parser', './parser.js?v=2026-10-23T13%3A06%3A29');
-  await load('rooms', './rooms.js?v=2026-10-23T13%3A06%3A29');
+  await load('xlsx', './xlsx.js?v=2026-10-24T08%3A57%3A27');
+  await load('xls', './xls.js?v=2026-10-24T08%3A57%3A27');
+  await load('parser', './parser.js?v=2026-10-24T08%3A57%3A27');
+  await load('rooms', './rooms.js?v=2026-10-24T08%3A57%3A27');
   if (!mod.parser) {
     toast('解析模块未就绪，页面仍可打开');
   }
@@ -449,6 +450,7 @@ async function onQuery() {
   store.set(K.name, name);
   await renderWeek();
   toast('已切换到「' + name + '」');
+  maybeAskCalendar('doctor', name, state.days);
 }
 
 async function queryReporter(name) {
@@ -464,7 +466,82 @@ async function queryReporter(name) {
   if (!doctorRows) { toast('还没导入医生排班表'); return; }
   const res = mod.parser.reporterWeek(doctorRows, rep, hit);
   if (!res.ok) { toast(res.error || '查不到'); return; }
+  const repDays = reporterShiftDays(rep, hit);
+  state.reporterName = hit;
   showReporterWeek(hit, res.days);
+  // 弹窗关掉后再无感问一次「生成日历提醒」，一周一人只问一次
+  const dlg = $('dlgPerson');
+  const onClose = () => {
+    dlg.removeEventListener('close', onClose);
+    maybeAskCalendar('reporter', hit, repDays);
+  };
+  dlg.addEventListener('close', onClose);
+}
+
+// ---------- 报告员周 → 日历班次（与安卓侧同一套规则） ----------
+
+/** 报告员格转显示文本：纯数字的半天补“诊”（6→6诊），其余原样。 */
+function reporterRawText(cell) {
+  const t = String(cell || '').replace(/\s+/g, '');
+  if (!t) return '';
+  return t.split('/').map((h) => (/^\d+$/.test(h) ? h + '诊' : h)).join('/');
+}
+
+/** 把报告员一周格子转成和医生周同构的 days（供 ics 导出 / 无感询问共用）。 */
+function reporterShiftDays(rep, hit) {
+  if (!rep || !Array.isArray(rep.entries)) return [];
+  const entry = rep.entries.find((e) => e.name === hit)
+    || rep.entries.find((e) => hit.includes(e.name) || e.name.includes(hit));
+  if (!entry) return [];
+  const days = [];
+  for (let i = 0; i < rep.ymds.length && i < entry.cells.length; i++) {
+    const raw = reporterRawText(entry.cells[i]);
+    const d = { ymd: rep.ymds[i], raw, type: 'REST', startTime: null, preTime: null, workInfo: '' };
+    try { mod.parser.fillShift(d, raw, 0); } catch { /* 解析失败按休息 */ }
+    days.push(d);
+  }
+  return days;
+}
+
+/** 查询完的无感询问：底部小条轻轻问一次，写入/暂不/自动消失都算问过。 */
+function maybeAskCalendar(kind, name, days) {
+  const first = (days || []).find((d) => d.ymd)?.ymd || '';
+  if (!first) return;
+  const key = kind + '|' + name + '|' + first;
+  if (store.get('sa.calAskKey', '') === key) return;
+  const upcoming = (days || []).some((d) =>
+    d.startTime && d.type !== 'REST' && d.type !== 'OFF_NIGHT' && d.ymd >= todayStr());
+  if (!upcoming) return;
+  store.set('sa.calAskKey', key);
+  const who = kind === 'reporter' ? '报告员' : '医生';
+  askCalendarBar('要把' + who + '「' + name + '」的本周班次生成日历提醒文件吗？', () => exportCalendar(days));
+}
+
+function todayStr() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+function askCalendarBar(text, onWrite) {
+  const bar = document.createElement('div');
+  bar.className = 'cal-ask';
+  const span = document.createElement('span');
+  span.className = 'cal-ask-text';
+  span.textContent = text;
+  const yes = document.createElement('button');
+  yes.type = 'button';
+  yes.className = 'cal-ask-yes';
+  yes.textContent = '写入';
+  const no = document.createElement('button');
+  no.type = 'button';
+  no.className = 'cal-ask-no';
+  no.textContent = '暂不';
+  const close = () => bar.remove();
+  yes.onclick = async () => { close(); await onWrite(); };
+  no.onclick = close;
+  bar.append(span, yes, no);
+  document.body.appendChild(bar);
+  setTimeout(close, 8000);
 }
 
 function showReporterWeek(name, days) {
@@ -541,20 +618,35 @@ function buildIcs(days) {
   return lines.join('\r\n');
 }
 
-async function exportCalendar() {
-  if (!state.days.length) { toast('先导入排班表'); return; }
-  const ics = buildIcs(state.days);
+async function exportCalendar(daysOverride = null) {
+  const days = daysOverride || state.days;
+  if (!days.length) { toast(daysOverride ? '还没有可写入的班次' : '先导入排班表'); return; }
+  const ics = buildIcs(days);
   if (!ics.includes('BEGIN:VEVENT')) { toast('这一周没有需要提醒的班次'); return; }
   const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `查班-${state.days[0].ymd}.ics`;
+  a.download = `查班-${days[0].ymd}.ics`;
   document.body.appendChild(a);
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 4000);
   toast('已生成日历文件，在“文件”里点它会导入日历');
+}
+
+/** 主界面日历按钮：医生模式导出本周医生班次；报告员模式导出最近查询的报告员班次。 */
+async function exportCalendarTop() {
+  if (state.kind === 'reporter') {
+    const rows = store.json(K.reporterRows, null);
+    const rep = rows && mod.parser?.parseReporter ? mod.parser.parseReporter(rows) : null;
+    const hit = state.reporterName || '';
+    const days = hit && rep ? reporterShiftDays(rep, hit) : [];
+    if (!days.length) { toast('先查询一位报告员'); return; }
+    await exportCalendar(days);
+    return;
+  }
+  await exportCalendar();
 }
 
 // ---------- 杂项 UI ----------
@@ -993,6 +1085,7 @@ async function init() {
   $('btnQuery').onclick = onQuery;
   $('nameInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') onQuery(); });
   $('btnCalendar').onclick = exportCalendar;
+  $('btnCalendarTop').onclick = exportCalendarTop;
   $('btnShare').onclick = shareWeekImage;
   $('btnShareReporter').onclick = shareReporterImage;
   document.querySelectorAll('#setThemeSeg button').forEach((b) => {
@@ -1389,5 +1482,5 @@ function loadCachedWeek() {
 }
 
 self.__APP_VERSION__ = APP_VERSION;
-self.__APP_BUILD__ = '2026-10-23T13:06:29';
+self.__APP_BUILD__ = '2026-10-24T08:57:27';
 document.addEventListener('DOMContentLoaded', init);

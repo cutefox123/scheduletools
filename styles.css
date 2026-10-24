@@ -696,3 +696,36 @@ dialog input[type="search"] {
   text-align: center;
   z-index: 99;
 }
+
+/* 查询后的「写入日历」无感询问条（一周一人只问一次） */
+.cal-ask {
+  position: fixed;
+  left: 50%;
+  bottom: calc(24px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: rgba(24, 33, 58, .95);
+  color: #fff;
+  font-size: 13px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, .35);
+  max-width: min(92vw, 560px);
+  z-index: 98;
+}
+
+.cal-ask-text { flex: 1; }
+
+.cal-ask button {
+  border: 0;
+  border-radius: 10px;
+  padding: 6px 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.cal-ask .cal-ask-yes { background: #fff; color: #18213A; font-weight: 700; }
+
+.cal-ask .cal-ask-no { background: transparent; color: #cdd6ea; }
