@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<!-- build:2026-10-24T11:51:20 -->
+<!-- build:2026-10-25T12:22:02 -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
 <title>查班小助手</title>
@@ -31,7 +31,7 @@
 <meta name="format-detection" content="telephone=no">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon-192.png" sizes="192x192">
-<link rel="stylesheet" href="styles.css?v=2026-10-24T11%3A51%3A20">
+<link rel="stylesheet" href="styles.css?v=2026-10-25T12%3A22%3A02">
 </head>
 <body>
 <div id="app">
@@ -46,7 +46,7 @@
             <path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/>
           </svg>
         </button>
-        <button id="btnRooms" class="icon-btn" type="button" aria-label="诊室查询" title="诊室查询">
+        <button id="btnRooms" class="icon-btn" type="button" aria-label="诊室 / 夜班查询" title="诊室 / 夜班查询">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M4 21h16"/><path d="M6 21V4a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v17"/>
@@ -190,7 +190,7 @@
 
   <div class="set-section">
     <div class="set-title">给用安卓的同事</div>
-    <p class="hint">安卓最新版 v3.14。旧版本的应用内更新可能失效，复制安装包直链发给他们手动覆盖安装。</p>
+    <p class="hint">安卓最新版 v3.25。旧版本的应用内更新可能失效，复制安装包直链发给他们手动覆盖安装。</p>
     <div class="dlg-actions">
       <button id="btnCopyApkFromSettings" class="btn-ghost solid" type="button">复制安装包直链</button>
       <button id="btnOpenApkPage" class="btn-primary" type="button">直接下载安装包</button>
@@ -255,9 +255,9 @@
 <!-- 版本与更新日志 -->
 <dialog id="dlgVersion">
   <h3>版本与更新</h3>
-  <p class="dlg-sub" id="verSub">网页版 v3.14</p>
-  <div class="set-row"><span>网页版</span><b id="verPwa">v3.14</b></div>
-  <div class="set-row"><span>安卓最新版</span><b id="verAndroid">v3.14</b></div>
+  <p class="dlg-sub" id="verSub">网页版 v3.25</p>
+  <div class="set-row"><span>网页版</span><b id="verPwa">v3.25</b></div>
+  <div class="set-row"><span>安卓最新版</span><b id="verAndroid">v3.25</b></div>
 
   <div class="ver-notes">
     <b>网页版更新方式</b>
@@ -268,7 +268,7 @@
   </div>
 
   <div class="ver-warn">
-    <b>安卓旧版本（低于 v3.14）请手动更新</b>
+    <b>安卓旧版本（低于 v3.25）请手动更新</b>
     <p id="verLegacy">旧版应用内更新可能失效，请复制安装包直链到浏览器手动安装。</p>
     <code id="verLink"></code>
     <div class="dlg-actions">
@@ -282,11 +282,16 @@
   </div>
 </dialog>
 
-<!-- 诊室查询 -->
+<!-- 查询：诊室 / 夜班 两栏 -->
 <dialog id="dlgRooms">
-  <h3>诊室查询</h3>
+  <h3 id="roomsTitle">诊室查询</h3>
+  <div class="seg-theme seg-rooms" id="roomTabs">
+    <button type="button" data-tab="room" class="on">诊室</button>
+    <button type="button" data-tab="night">夜班</button>
+  </div>
   <input id="roomSearch" type="search" placeholder="输入诊室，如 东6 / 二期5 / 床旁" autocomplete="off">
   <div id="roomList" class="person-list"></div>
+  <div id="nightList" class="night-list" hidden></div>
   <div class="dlg-actions">
     <button id="btnCloseRooms" class="btn-ghost solid">关闭</button>
   </div>
@@ -294,6 +299,6 @@
 
 <input id="filePicker" type="file" accept=".xlsx,.xls,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
 
-<script type="module" src="app.js?v=2026-10-24T11%3A51%3A20"></script>
+<script type="module" src="app.js?v=2026-10-25T12%3A22%3A02"></script>
 </body>
 </html>

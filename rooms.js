@@ -22,7 +22,10 @@ import {
   primaryKey,
   canonicalRoom,
   dayLabelsOf,
-} from './parser.js?v=2026-10-24T11%3A51%3A20';
+  classify,
+  safeDate,
+  isoDate,
+} from './parser.js?v=2026-10-25T12%3A22%3A02';
 
 // ---------------- 诊室目录 ----------------
 
@@ -304,6 +307,109 @@ export function roomDetail(doctorMatrix, repResult, key) {
 }
 
 
+// ---------------- 夜班总览 ----------------
+
+/**
+ * 一周里每天谁在听班、谁在岗上夜班。对应 Java 的 NightRoster.build。
+ *
+ * 医生表底部固定两行「东院二线听班（夜班）」「老院二线听班（夜班）」，
+ * 日期列里各写一个人名；常规人员行里带「夜」的格子就是当晚上夜班的人，
+ * 「夜辅」单独归一堆。表里的值班室/急诊化验电话行原样带出来。
+ *
+ * 返回 { ok, hasListener, hasNight, days: [{ ymd, week, date, east, old, night, assist }], phones }
+ */
+export function nightRoster(doctorMatrix) {
+  const h = findHeader(doctorMatrix);
+  const out = { ok: true, hasListener: false, hasNight: false, days: [], phones: [] };
+  if (h.error != null) {
+    out.ok = false;
+    out.error = h.error;
+    return out;
+  }
+  const labels = dayLabelsOf(h);
+  out.days = h.dateCols.map((dc, i) => {
+    const d = dc.fullDate != null ? dc.fullDate : safeDate(h.resolvedYear, dc.month, dc.day);
+    return {
+      ymd: d == null ? '' : isoDate(d),
+      week: labels[i].weekLabel,
+      date: labels[i].dateLabel,
+      east: '',
+      old: '',
+      night: [],
+      assist: [],
+    };
+  });
+
+  for (const row of doctorMatrix) {
+    if (!row) continue;
+    // 1) 二线听班行：标签里同时有「听班」和「夜」
+    let labelCol = -1;
+    const limit = Math.min(h.firstDateCol, row.length);
+    for (let i = 0; i < limit; i++) {
+      const t = stripWs(row[i]);
+      if (t.includes('听班') && t.includes('夜')) { labelCol = i; break; }
+    }
+    if (labelCol >= 0) {
+      const label = stripWs(row[labelCol]);
+      const east = label.includes('东');
+      const old = !east && (label.includes('老') || label.includes('西'));
+      if (east || old) {
+        out.hasListener = true;
+        const n = Math.min(h.dateCols.length, out.days.length);
+        for (let i = 0; i < n; i++) {
+          const dc = h.dateCols[i];
+          const name = cleanListenerName(dc.col < row.length ? row[dc.col] : '');
+          if (name === '') continue;
+          if (east) out.days[i].east = name;
+          else out.days[i].old = name;
+        }
+        continue;
+      }
+    }
+
+    // 2) 值班电话行
+    const phone = phoneLine(row);
+    if (phone !== '' && !out.phones.includes(phone) && out.phones.length < 3) {
+      out.phones.push(phone);
+    }
+
+    // 3) 常规人员行：这一格是夜班/夜辅就算当晚在岗
+    const nameCol = doctorNameCol(row, h.firstDateCol);
+    if (nameCol < 0) continue;
+    const name = cleanListenerName(row[nameCol]);
+    if (name === '') continue;
+    const n = Math.min(h.dateCols.length, out.days.length);
+    for (let i = 0; i < n; i++) {
+      const dc = h.dateCols[i];
+      const cell = stripWs(dc.col < row.length ? row[dc.col] : '');
+      if (cell === '' || classify(cell) !== 'NIGHT') continue;
+      out.hasNight = true;
+      const bucket = cell.includes('夜辅') ? out.days[i].assist : out.days[i].night;
+      if (!bucket.includes(name)) bucket.push(name);
+    }
+  }
+  return out;
+}
+
+/** 听班格里的名字：去掉空白和括号备注。 */
+function cleanListenerName(cell) {
+  let t = stripWs(cell);
+  if (t === '') return '';
+  t = t.replace(/[（(][^）)]*[）)]/g, '');
+  if (/^[/\\|\-—~．.、，,。:：]+$/.test(t)) return '';
+  return t;
+}
+
+/** 「院值班室…」「急诊化验…」这类电话行。 */
+function phoneLine(row) {
+  for (const cell of row) {
+    const t = cell == null ? '' : jtrim(String(cell)).replace(/\s+/g, ' ');
+    if (t.length < 6) continue;
+    if (t.includes('值班室') || t.includes('急诊化验')) return t;
+  }
+  return '';
+}
+
 // 报告员一周排班与 Java 的 RoomDirectory.reporterWeek 对应，按 API 归属放在 parser.js；
-// 这里再导出一份，方便 import { reporterWeek } from './rooms.js?v=2026-10-24T11%3A51%3A20' 的用法。
-export { reporterWeek } from './parser.js?v=2026-10-24T11%3A51%3A20';
+// 这里再导出一份，方便 import { reporterWeek } from './rooms.js?v=2026-10-25T12%3A22%3A02' 的用法。
+export { reporterWeek } from './parser.js?v=2026-10-25T12%3A22%3A02';

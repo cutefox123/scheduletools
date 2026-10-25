@@ -1,8 +1,8 @@
 // 查班小助手 PWA —— 主逻辑
 // 解析全部在本地完成（js/xlsx.js、js/xls.js、js/parser.js、js/rooms.js），数据只存 localStorage。
 
-import { fetchWeather } from './weather.js?v=2026-10-24T11%3A51%3A20';
-import { buildTips } from './tips.js?v=2026-10-24T11%3A51%3A20';
+import { fetchWeather } from './weather.js?v=2026-10-25T12%3A22%3A02';
+import { buildTips } from './tips.js?v=2026-10-25T12%3A22%3A02';
 
 const K = {
   doctorRows: 'sa.doctorRows',
@@ -40,8 +40,8 @@ const TYPE_STYLE_DARK = {
 const $ = (id) => document.getElementById(id);
 
 // 版本跟进：网页版与安卓正式版保持同一个版本号，构建戳只用于判断“网页有没有更新”。
-const APP_VERSION = '3.24';
-const ANDROID_VERSION = '3.14';
+const APP_VERSION = '3.25';
+const ANDROID_VERSION = '3.25';
 // 安卓安装包直链：COS 不允许 .apk 后缀，.bin 就是 APK 本体，Content-Disposition 会还原文件名。
 const ANDROID_APK_URL =
   'https://lovenest-1500804548.cos.ap-guangzhou.myqcloud.com/schedule/scheduleassistant-latest.bin';
@@ -181,10 +181,10 @@ async function loadModules() {
       return false;
     }
   };
-  await load('xlsx', './xlsx.js?v=2026-10-24T11%3A51%3A20');
-  await load('xls', './xls.js?v=2026-10-24T11%3A51%3A20');
-  await load('parser', './parser.js?v=2026-10-24T11%3A51%3A20');
-  await load('rooms', './rooms.js?v=2026-10-24T11%3A51%3A20');
+  await load('xlsx', './xlsx.js?v=2026-10-25T12%3A22%3A02');
+  await load('xls', './xls.js?v=2026-10-25T12%3A22%3A02');
+  await load('parser', './parser.js?v=2026-10-25T12%3A22%3A02');
+  await load('rooms', './rooms.js?v=2026-10-25T12%3A22%3A02');
   if (!mod.parser) {
     toast('解析模块未就绪，页面仍可打开');
   }
@@ -1373,6 +1373,7 @@ async function init() {
   };
   $('btnRooms').onclick = openRooms;
   $('btnCloseRooms').onclick = () => $('dlgRooms').close();
+  bindRoomTabs();
 
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') checkForUpdate();
@@ -1599,7 +1600,95 @@ async function openRooms() {
   $('roomSearch').value = '';
   $('roomSearch').oninput = (e) => draw(e.target.value);
   draw('');
+  // 每次从图标进来都停在「诊室」这栏，夜班留给人主动切
+  selectRoomTab('room');
   $('dlgRooms').showModal();
+}
+
+// ---------------- 夜班总览 ----------------
+
+/** 「诊室 / 夜班」页签：样式跟设置里的外观选择器一致。 */
+function bindRoomTabs() {
+  const tabs = Array.from(document.querySelectorAll('#roomTabs button'));
+  for (const b of tabs) {
+    b.onclick = () => selectRoomTab(b.dataset.tab === 'night' ? 'night' : 'room');
+  }
+}
+
+function selectRoomTab(tab) {
+  const night = tab === 'night';
+  const tabs = Array.from(document.querySelectorAll('#roomTabs button'));
+  for (const b of tabs) {
+    b.classList.toggle('on', (b.dataset.tab === 'night') === night);
+  }
+  $('roomsTitle').textContent = night ? '夜班总览' : '诊室查询';
+  $('roomSearch').hidden = night;
+  $('roomList').hidden = night;
+  $('nightList').hidden = !night;
+  if (night) renderNight();
+}
+
+/** 一周七天：东院/老院二线听班 + 当晚上夜班与夜辅 + 表里的值班电话。 */
+function renderNight() {
+  const el = $('nightList');
+  const doctorRows = store.json(K.doctorRows, null);
+  if (!doctorRows) {
+    el.innerHTML = '<p class="hint" style="padding:12px 6px">先导入医生排班表</p>';
+    return;
+  }
+  if (!mod.rooms?.nightRoster) {
+    el.innerHTML = '<p class="hint" style="padding:12px 6px">夜班模块未就绪，请强制刷新网页版</p>';
+    return;
+  }
+  let r;
+  try {
+    r = mod.rooms.nightRoster(doctorRows);
+  } catch (e) {
+    el.innerHTML = `<p class="hint" style="padding:12px 6px">夜班读取失败：${escapeHtml(e.message)}</p>`;
+    return;
+  }
+  if (!r.ok) {
+    el.innerHTML = `<p class="hint" style="padding:12px 6px">${escapeHtml(r.error || '读不到排班表')}</p>`;
+    return;
+  }
+  if (!r.hasListener && !r.hasNight) {
+    el.innerHTML = '<p class="hint" style="padding:12px 6px">这张表里没有「二线听班（夜班）」行，也没有人排在夜班</p>';
+    return;
+  }
+  const today = todayYmd();
+  let html = '';
+  for (const d of r.days) {
+    const [, mm, dd] = String(d.ymd || '').split('-');
+    const dayNumber = mm && dd ? `${Number(mm)}.${Number(dd)}` : escapeHtml(d.date || '');
+    const week = String(d.week || '').replace('星期', '');
+    const isToday = d.ymd === today;
+    html += `<div class="night-row${isToday ? ' today' : ''}">`
+      + `<div class="night-date"><b>${dayNumber}</b><span>星期${escapeHtml(week)}</span></div>`
+      + '<div class="night-body">'
+      + (isToday ? '<span class="night-today-tag">今晚</span>' : '')
+      + nightLine('东院听班', d.east)
+      + nightLine('老院听班', d.old)
+      + (d.night.length ? nightLine('上夜班', d.night.join('、'), 'night-duty') : '')
+      + (d.assist.length ? nightLine('夜辅', d.assist.join('、'), 'night-assist') : '')
+      + '</div></div>';
+  }
+  if (r.phones.length) {
+    html += '<div class="night-phone"><b>夜班常用电话</b>'
+      + r.phones.map((p) => escapeHtml(p)).join('<br>') + '</div>';
+  }
+  el.innerHTML = html;
+}
+
+function nightLine(label, value, cls = '') {
+  const text = value ? `<b>${escapeHtml(value)}</b>` : '<span class="hint">—</span>';
+  return `<div class="night-line ${cls}"><i>${escapeHtml(label)}</i><span>${text}</span></div>`;
+}
+
+/** 本地今天的 yyyy-MM-dd（不用 toISOString，避免时区串到昨天）。 */
+function todayYmd() {
+  const t = new Date();
+  const p = (n) => String(n).padStart(2, '0');
+  return `${t.getFullYear()}-${p(t.getMonth() + 1)}-${p(t.getDate())}`;
 }
 
 function showRoomDetail(doctorRows, rep, room) {
@@ -1671,5 +1760,5 @@ function loadCachedWeek() {
 }
 
 self.__APP_VERSION__ = APP_VERSION;
-self.__APP_BUILD__ = '2026-10-24T11:51:20';
+self.__APP_BUILD__ = '2026-10-25T12:22:02';
 document.addEventListener('DOMContentLoaded', init);
