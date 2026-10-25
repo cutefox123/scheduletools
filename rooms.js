@@ -25,7 +25,7 @@ import {
   classify,
   safeDate,
   isoDate,
-} from './parser.js?v=2026-10-25T12%3A24%3A11';
+} from './parser.js?v=2026-10-25T12%3A51%3A47';
 
 // ---------------- 诊室目录 ----------------
 
@@ -411,5 +411,5 @@ function phoneLine(row) {
 }
 
 // 报告员一周排班与 Java 的 RoomDirectory.reporterWeek 对应，按 API 归属放在 parser.js；
-// 这里再导出一份，方便 import { reporterWeek } from './rooms.js?v=2026-10-25T12%3A24%3A11' 的用法。
-export { reporterWeek } from './parser.js?v=2026-10-25T12%3A24%3A11';
+// 这里再导出一份，方便 import { reporterWeek } from './rooms.js?v=2026-10-25T12%3A51%3A47' 的用法。
+export { reporterWeek } from './parser.js?v=2026-10-25T12%3A51%3A47';

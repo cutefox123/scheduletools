@@ -1139,21 +1139,42 @@ function addPartner(half, doctor, doctorToken) {
   }
 }
 
-/** 报告员这半天是中班、医生同一天也有同一个中班 → 是搭档（中班不分上午/下午槽位）。 */
+/**
+ * 报告员这半天是中班、医生同一天也是**同一种**中班（中 / 东中 / 西中 / 值中）→ 是搭档。
+ *
+ * 以前这里允许「任一方写‘中’就互认」，结果写「东中」的报告员把总院中班那 2 个医生
+ * 也一起算成搭档（每天中班是 东中 1 人 + 中 2 人 + 值中 0~1 人，岗位是平行的），
+ * 于是报告员查询里中班搭档会多出一到两个人。现在要求院区完全一致。
+ */
 function addMidPartner(half, doctor, doctorCell, repCell) {
   if (midKey(half.place) === '') return;
   const repMid = midToken(repCell);
   const docMid = midToken(doctorCell);
   if (repMid === '' || docMid === '') return;
-  if (repMid !== docMid) {
-    // 东中/西中 与只写“中”的报告员互认；值中单独一类；东中与西中不互认
-    const repPlain = repMid === '中';
-    const docPlain = docMid === '中';
-    const hasValue = repMid === '值中' || docMid === '值中';
-    if (hasValue || !(repPlain || docPlain)) return;
-  }
+  if (repMid !== docMid) return;
   if (!half.partners.includes(doctor)) {
     half.partners.push(doctor);
+  }
+}
+
+/**
+ * 中班兜底：精确匹配（院区一致）一个搭档都没配上时，退一步按「任意中班医生」补。
+ * 只在报告员这半天确实是中班、且不是「值中」时生效——「值中」是独立的午间值班岗位，
+ * 表里没有对应医生就该空着，不能拿总院中班的医生去顶。
+ */
+function fillMidFallback(half, repCell, doctorMatrix, h, dateIdx) {
+  const repMid = midToken(repCell);
+  if (repMid === '' || repMid === '值中') return;
+  if (midKey(half.place) === '' || half.partners.length > 0) return;
+  const dc = h.dateCols[dateIdx];
+  for (const row of doctorMatrix) {
+    const nameCol = doctorNameCol(row, h.firstDateCol);
+    if (nameCol < 0) continue;
+    const cell = dc.col < row.length ? stripWs(row[dc.col]) : '';
+    const docMid = midToken(cell);
+    if (docMid === '' || docMid === '值中') continue;
+    const doctor = jtrim(row[nameCol]);
+    if (!half.partners.includes(doctor)) half.partners.push(doctor);
   }
 }
 
@@ -1218,13 +1239,15 @@ export function reporterWeek(doctorMatrix, repResult, name) {
     }
   }
 
-  for (const row of doctorMatrix) {
-    const nameCol = doctorNameCol(row, h.firstDateCol);
-    if (nameCol < 0) continue;
-    const doctor = jtrim(row[nameCol]);
-    const n = Math.min(h.dateCols.length, out.length);
-    for (let i = 0; i < n; i++) {
-      const dc = h.dateCols[i];
+  const repCells = entry.cells == null ? [] : entry.cells;
+  const n = Math.min(h.dateCols.length, out.length);
+  for (let i = 0; i < n; i++) {
+    const dc = h.dateCols[i];
+    const repCell = repCells[i] == null ? '' : String(repCells[i]);
+    for (const row of doctorMatrix) {
+      const nameCol = doctorNameCol(row, h.firstDateCol);
+      if (nameCol < 0) continue;
+      const doctor = jtrim(row[nameCol]);
       const cell = dc.col < row.length ? jtrim(row[dc.col]) : '';
       const t = stripWs(cell);
       if (t === '') continue;
@@ -1233,10 +1256,13 @@ export function reporterWeek(doctorMatrix, repResult, name) {
       const pm = slash >= 0 ? t.substring(slash + 1) : t;
       addPartner(out[i].am, doctor, am);
       addPartner(out[i].pm, doctor, pm);
-      // 中班：两表写在不同半天（医生“4诊/中”、报告员“中//4诊”），按中班本身配对
-      addMidPartner(out[i].am, doctor, t, entry.cells[i]);
-      addMidPartner(out[i].pm, doctor, t, entry.cells[i]);
+      // 中班：两表写在不同半天（医生“4诊/中”、报告员“中/4诊”），按中班本身配对
+      addMidPartner(out[i].am, doctor, t, repCell);
+      addMidPartner(out[i].pm, doctor, t, repCell);
     }
+    // 精确匹配（院区一致）一个人都没配上时，退一步按“任意中班医生”补，避免整天空着
+    fillMidFallback(out[i].am, repCell, doctorMatrix, h, i);
+    fillMidFallback(out[i].pm, repCell, doctorMatrix, h, i);
   }
 
   result.ok = true;

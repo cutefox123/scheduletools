@@ -1,8 +1,8 @@
 // 查班小助手 PWA —— 主逻辑
 // 解析全部在本地完成（js/xlsx.js、js/xls.js、js/parser.js、js/rooms.js），数据只存 localStorage。
 
-import { fetchWeather } from './weather.js?v=2026-10-25T12%3A24%3A11';
-import { buildTips } from './tips.js?v=2026-10-25T12%3A24%3A11';
+import { fetchWeather } from './weather.js?v=2026-10-25T12%3A51%3A47';
+import { buildTips } from './tips.js?v=2026-10-25T12%3A51%3A47';
 
 const K = {
   doctorRows: 'sa.doctorRows',
@@ -40,8 +40,8 @@ const TYPE_STYLE_DARK = {
 const $ = (id) => document.getElementById(id);
 
 // 版本跟进：网页版与安卓正式版保持同一个版本号，构建戳只用于判断“网页有没有更新”。
-const APP_VERSION = '3.25';
-const ANDROID_VERSION = '3.25';
+const APP_VERSION = '3.26';
+const ANDROID_VERSION = '3.26';
 // 安卓安装包直链：COS 不允许 .apk 后缀，.bin 就是 APK 本体，Content-Disposition 会还原文件名。
 const ANDROID_APK_URL =
   'https://lovenest-1500804548.cos.ap-guangzhou.myqcloud.com/schedule/scheduleassistant-latest.bin';
@@ -181,10 +181,10 @@ async function loadModules() {
       return false;
     }
   };
-  await load('xlsx', './xlsx.js?v=2026-10-25T12%3A24%3A11');
-  await load('xls', './xls.js?v=2026-10-25T12%3A24%3A11');
-  await load('parser', './parser.js?v=2026-10-25T12%3A24%3A11');
-  await load('rooms', './rooms.js?v=2026-10-25T12%3A24%3A11');
+  await load('xlsx', './xlsx.js?v=2026-10-25T12%3A51%3A47');
+  await load('xls', './xls.js?v=2026-10-25T12%3A51%3A47');
+  await load('parser', './parser.js?v=2026-10-25T12%3A51%3A47');
+  await load('rooms', './rooms.js?v=2026-10-25T12%3A51%3A47');
   if (!mod.parser) {
     toast('解析模块未就绪，页面仍可打开');
   }
@@ -1760,5 +1760,5 @@ function loadCachedWeek() {
 }
 
 self.__APP_VERSION__ = APP_VERSION;
-self.__APP_BUILD__ = '2026-10-25T12:24:11';
+self.__APP_BUILD__ = '2026-10-25T12:51:47';
 document.addEventListener('DOMContentLoaded', init);
