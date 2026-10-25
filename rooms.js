@@ -25,7 +25,7 @@ import {
   classify,
   safeDate,
   isoDate,
-} from './parser.js?v=2026-10-25T13%3A27%3A12';
+} from './parser.js?v=2026-10-25T13%3A36%3A50';
 
 // ---------------- 诊室目录 ----------------
 
@@ -394,5 +394,5 @@ export function shiftRoster(doctorMatrix, token) {
 }
 
 // 报告员一周排班与 Java 的 RoomDirectory.reporterWeek 对应，按 API 归属放在 parser.js；
-// 这里再导出一份，方便 import { reporterWeek } from './rooms.js?v=2026-10-25T13%3A27%3A12' 的用法。
-export { reporterWeek } from './parser.js?v=2026-10-25T13%3A27%3A12';
+// 这里再导出一份，方便 import { reporterWeek } from './rooms.js?v=2026-10-25T13%3A36%3A50' 的用法。
+export { reporterWeek } from './parser.js?v=2026-10-25T13%3A36%3A50';
