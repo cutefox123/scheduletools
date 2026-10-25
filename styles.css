@@ -751,103 +751,9 @@ dialog input[type="search"] {
   outline-offset: 2px;
 }
 
-/* 查询弹窗：诊室 / 夜班 两栏 */
-.seg-rooms {
-  max-width: 210px;
-  margin: 4px 0 2px;
-}
-
-.seg-rooms button {
-  padding: 7px 4px;
-}
-
-/* 切到「夜班」时搜索框和诊室列表必须彻底收起（有些浏览器会忽略 hidden） */
-#roomSearch[hidden],
-#roomList[hidden],
-#nightList[hidden] {
-  display: none !important;
-}
-
-/* 夜班总览：每天一块，左边日期，右边听班与在岗 */
-.night-list {
-  max-height: 52vh;
-  overflow: auto;
-  margin-top: 10px;
-}
-
-.night-row {
-  padding: 11px 8px;
-  border-bottom: 1px solid var(--border);
-  display: flex;
-  gap: 10px;
-  align-items: flex-start;
-}
-
-.night-row.today {
-  background: var(--tips-bg);
-  border-radius: 12px;
-  border-bottom-color: transparent;
-}
-
-.night-date {
-  flex: 0 0 52px;
-  text-align: center;
-  padding: 6px 0;
-  border-radius: 13px;
-  background: var(--tips-bg);
-  color: var(--brand);
-}
-
-.night-row.today .night-date {
-  background: var(--brand-on-light);
-  color: #fff;
-}
-
-.night-date b {
-  display: block;
-  font-size: 17px;
-  line-height: 1.2;
-}
-
-.night-date span {
-  font-size: 10.5px;
-  opacity: .85;
-}
-
-.night-body {
-  flex: 1;
-  min-width: 0;
-}
-
-.night-line {
-  display: flex;
-  gap: 6px;
-  font-size: 13px;
-  line-height: 1.45;
-  color: var(--text);
-}
-
-.night-line + .night-line {
-  margin-top: 4px;
-}
-
-.night-line i {
-  font-style: normal;
-  flex: 0 0 58px;
-  font-size: 11.5px;
-  color: var(--sub);
-}
-
-.night-line b {
-  font-weight: 700;
-}
-
-.night-line.night-duty i { color: var(--brand-2); }
-.night-line.night-assist i { color: var(--warn); }
-
+/* 「今晚」标记：夜班查询里标出当天那行 */
 .night-today-tag {
   display: inline-block;
-  margin-bottom: 4px;
   padding: 1px 6px;
   border-radius: 7px;
   font-size: 10.5px;
@@ -855,23 +761,6 @@ dialog input[type="search"] {
   color: var(--brand-on-light);
   background: var(--tips-bg);
   border: 1px solid var(--border);
-}
-
-.night-phone {
-  margin-top: 12px;
-  padding: 10px 8px;
-  border-radius: 14px;
-  background: var(--input);
-  font-size: 12px;
-  line-height: 1.55;
-  color: var(--sub);
-}
-
-.night-phone b {
-  display: block;
-  margin-bottom: 4px;
-  font-size: 12.5px;
-  color: var(--text);
 }
 
 /* 使用引导 */

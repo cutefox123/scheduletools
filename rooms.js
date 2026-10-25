@@ -25,7 +25,7 @@ import {
   classify,
   safeDate,
   isoDate,
-} from './parser.js?v=2026-10-25T12%3A51%3A47';
+} from './parser.js?v=2026-10-25T13%3A27%3A12';
 
 // ---------------- 诊室目录 ----------------
 
@@ -307,109 +307,92 @@ export function roomDetail(doctorMatrix, repResult, key) {
 }
 
 
-// ---------------- 夜班总览 ----------------
+// ---------------- 夜班查询 ----------------
+
+/** 四种夜班岗位，和 Java 的 ShiftRoster.TOKENS 一致。 */
+export const SHIFT_TOKENS = ['夜', '东夜', '西夜', '东夜辅'];
 
 /**
- * 一周里每天谁在听班、谁在岗上夜班。对应 Java 的 NightRoster.build。
+ * 一格排班 → 夜班岗位名（夜 / 东夜 / 西夜 / 东夜辅），不是夜班返回 ''。
+ * 对应 Java 的 ShiftRoster.shiftToken。
  *
- * 医生表底部固定两行「东院二线听班（夜班）」「老院二线听班（夜班）」，
- * 日期列里各写一个人名；常规人员行里带「夜」的格子就是当晚上夜班的人，
- * 「夜辅」单独归一堆。表里的值班室/急诊化验电话行原样带出来。
- *
- * 返回 { ok, hasListener, hasNight, days: [{ ymd, week, date, east, old, night, assist }], phones }
+ * 表里写法有十几种，落到夜里那一段才是岗位：
+ *   东夜 → 东夜        产4/夜、/夜 → 夜
+ *   东2/西夜、/西夜 → 西夜        东急诊/东夜辅、/东夜辅 → 东夜辅
+ * 「/」前的诊室名只是白天岗位，不参与判断；下夜 / 下东夜 由 classify 判成 OFF_NIGHT，自动排除。
  */
-export function nightRoster(doctorMatrix) {
-  const h = findHeader(doctorMatrix);
-  const out = { ok: true, hasListener: false, hasNight: false, days: [], phones: [] };
-  if (h.error != null) {
-    out.ok = false;
-    out.error = h.error;
-    return out;
-  }
-  const labels = dayLabelsOf(h);
-  out.days = h.dateCols.map((dc, i) => {
-    const d = dc.fullDate != null ? dc.fullDate : safeDate(h.resolvedYear, dc.month, dc.day);
-    return {
-      ymd: d == null ? '' : isoDate(d),
-      week: labels[i].weekLabel,
-      date: labels[i].dateLabel,
-      east: '',
-      old: '',
-      night: [],
-      assist: [],
-    };
-  });
-
-  for (const row of doctorMatrix) {
-    if (!row) continue;
-    // 1) 二线听班行：标签里同时有「听班」和「夜」
-    let labelCol = -1;
-    const limit = Math.min(h.firstDateCol, row.length);
-    for (let i = 0; i < limit; i++) {
-      const t = stripWs(row[i]);
-      if (t.includes('听班') && t.includes('夜')) { labelCol = i; break; }
-    }
-    if (labelCol >= 0) {
-      const label = stripWs(row[labelCol]);
-      const east = label.includes('东');
-      const old = !east && (label.includes('老') || label.includes('西'));
-      if (east || old) {
-        out.hasListener = true;
-        const n = Math.min(h.dateCols.length, out.days.length);
-        for (let i = 0; i < n; i++) {
-          const dc = h.dateCols[i];
-          const name = cleanListenerName(dc.col < row.length ? row[dc.col] : '');
-          if (name === '') continue;
-          if (east) out.days[i].east = name;
-          else out.days[i].old = name;
-        }
-        continue;
-      }
-    }
-
-    // 2) 值班电话行
-    const phone = phoneLine(row);
-    if (phone !== '' && !out.phones.includes(phone) && out.phones.length < 3) {
-      out.phones.push(phone);
-    }
-
-    // 3) 常规人员行：这一格是夜班/夜辅就算当晚在岗
-    const nameCol = doctorNameCol(row, h.firstDateCol);
-    if (nameCol < 0) continue;
-    const name = cleanListenerName(row[nameCol]);
-    if (name === '') continue;
-    const n = Math.min(h.dateCols.length, out.days.length);
-    for (let i = 0; i < n; i++) {
-      const dc = h.dateCols[i];
-      const cell = stripWs(dc.col < row.length ? row[dc.col] : '');
-      if (cell === '' || classify(cell) !== 'NIGHT') continue;
-      out.hasNight = true;
-      const bucket = cell.includes('夜辅') ? out.days[i].assist : out.days[i].night;
-      if (!bucket.includes(name)) bucket.push(name);
-    }
-  }
-  return out;
-}
-
-/** 听班格里的名字：去掉空白和括号备注。 */
-function cleanListenerName(cell) {
-  let t = stripWs(cell);
-  if (t === '') return '';
-  t = t.replace(/[（(][^）)]*[）)]/g, '');
-  if (/^[/\\|\-—~．.、，,。:：]+$/.test(t)) return '';
-  return t;
-}
-
-/** 「院值班室…」「急诊化验…」这类电话行。 */
-function phoneLine(row) {
-  for (const cell of row) {
-    const t = cell == null ? '' : jtrim(String(cell)).replace(/\s+/g, ' ');
-    if (t.length < 6) continue;
-    if (t.includes('值班室') || t.includes('急诊化验')) return t;
+export function shiftToken(cell) {
+  const t = stripWs(cell == null ? '' : String(cell));
+  if (t === '' || classify(t) !== 'NIGHT') return '';
+  for (const part of t.split('/')) {
+    if (!part.includes('夜')) continue;
+    if (part.includes('夜辅')) return '东夜辅';
+    if (part.includes('东')) return '东夜';
+    if (part.includes('西') || part.includes('老')) return '西夜';
+    return '夜';
   }
   return '';
 }
 
+/** 把用户输入收敛成四种之一，认不出返回 ''。对应 Java 的 normalizeToken。 */
+export function normalizeShiftToken(token) {
+  const t = stripWs(token == null ? '' : String(token));
+  if (t === '') return '';
+  if (SHIFT_TOKENS.includes(t)) return t;
+  if (t.includes('夜辅')) return '东夜辅';
+  if (t.includes('东') && t.includes('夜')) return '东夜';
+  if ((t.includes('西') || t.includes('老')) && t.includes('夜')) return '西夜';
+  if (t.includes('夜')) return '夜';
+  return '';
+}
+
+/**
+ * 某一种夜班本周每天是谁。对应 Java 的 ShiftRoster.build。
+ *
+ * 返回 { ok, token, any, days: [{ ymd, week, date, names: [] }] }
+ */
+export function shiftRoster(doctorMatrix, token) {
+  const out = { ok: false, token: '', any: false, days: [] };
+  const want = normalizeShiftToken(token);
+  if (want === '') {
+    out.error = '不认识的夜班类型：' + token;
+    return out;
+  }
+  out.token = want;
+  const h = findHeader(doctorMatrix);
+  if (h.error != null) {
+    out.error = h.error;
+    return out;
+  }
+  const labels = dayLabelsOf(h);
+  out.days = h.dateCols.map((dc, i) => ({
+    ymd: isoDate(dc.fullDate != null ? dc.fullDate : safeDate(h.resolvedYear, dc.month, dc.day)),
+    week: labels[i].weekLabel,
+    date: labels[i].dateLabel,
+    names: [],
+  }));
+
+  for (const row of doctorMatrix) {
+    if (!row) continue;
+    // 听班行、电话行没有姓名列，doctorNameCol 返回 -1，自动跳过
+    const nameCol = doctorNameCol(row, h.firstDateCol);
+    if (nameCol < 0) continue;
+    const name = jtrim(row[nameCol]);
+    if (name === '') continue;
+    const n = Math.min(h.dateCols.length, out.days.length);
+    for (let i = 0; i < n; i++) {
+      const dc = h.dateCols[i];
+      const cell = dc.col < row.length ? row[dc.col] : '';
+      if (shiftToken(cell) !== want) continue;
+      const bucket = out.days[i].names;
+      if (!bucket.includes(name)) bucket.push(name);
+      out.any = true;
+    }
+  }
+  out.ok = true;
+  return out;
+}
+
 // 报告员一周排班与 Java 的 RoomDirectory.reporterWeek 对应，按 API 归属放在 parser.js；
-// 这里再导出一份，方便 import { reporterWeek } from './rooms.js?v=2026-10-25T12%3A51%3A47' 的用法。
-export { reporterWeek } from './parser.js?v=2026-10-25T12%3A51%3A47';
+// 这里再导出一份，方便 import { reporterWeek } from './rooms.js?v=2026-10-25T13%3A27%3A12' 的用法。
+export { reporterWeek } from './parser.js?v=2026-10-25T13%3A27%3A12';
