@@ -75,6 +75,55 @@
 
 * { box-sizing: border-box; }
 
+/* ---------- 报告员视角：整套换成海报同款青绿（v3.32） ----------
+   和安卓一致：医生的品牌蓝不变，报告员用 #0E9F8F / #0B8C7F / 浅底 #E7F7F4。
+   只覆盖变量，别在别处再写死绿色。 */
+body.reporter {
+  --brand: #0E9F8F;
+  --brand-2: #0B8C7F;
+  --brand-on-light: #0B8C7F;
+  --hero-grad: linear-gradient(135deg, #12B3A0 0%, #0E9F8F 55%, #0B8C7F 100%);
+  --hero-shadow: rgba(14, 159, 143, .28);
+}
+
+body.reporter .day {
+  background: #E7F7F4;
+  border-color: #D4F5F0;
+}
+
+body.reporter .day.today {
+  border-color: rgba(14, 159, 143, .5);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) body.reporter {
+    --brand: #3ED3BE;
+    --brand-2: #22A897;
+    --brand-on-light: #3ED3BE;
+    --hero-grad: linear-gradient(135deg, #137A6E 0%, #0E9F8F 55%, #1FBCA6 100%);
+    --hero-shadow: rgba(0, 0, 0, .45);
+  }
+
+  :root:not([data-theme="light"]) body.reporter .day {
+    background: #10302C;
+    border-color: #1E544C;
+  }
+}
+
+:root[data-theme="dark"] body.reporter {
+  --brand: #3ED3BE;
+  --brand-2: #22A897;
+  --brand-on-light: #3ED3BE;
+  --hero-grad: linear-gradient(135deg, #137A6E 0%, #0E9F8F 55%, #1FBCA6 100%);
+  --hero-shadow: rgba(0, 0, 0, .45);
+}
+
+:root[data-theme="dark"] body.reporter .day {
+  background: #10302C;
+  border-color: #1E544C;
+}
+
+
 html, body {
   margin: 0;
   padding: 0;
@@ -120,6 +169,26 @@ html, body {
   font-size: 24px;
   font-weight: 700;
   letter-spacing: .3px;
+}
+
+.hero-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* 视角口径牌：报告员整页换青绿，这块牌子再补一刀，防止看错（v3.32） */
+.mode-pill {
+  flex: none;
+  padding: 3px 9px;
+  border-radius: 9px;
+  border: 1px solid rgba(255, 255, 255, .34);
+  background: rgba(255, 255, 255, .22);
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1.3;
+  white-space: nowrap;
 }
 
 .hero-icons {

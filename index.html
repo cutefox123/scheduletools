@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<!-- build:2026-10-26T22:28:27 -->
+<!-- build:2026-10-26T22:49:25 -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
 <title>查班小助手</title>
@@ -31,14 +31,17 @@
 <meta name="format-detection" content="telephone=no">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon-192.png" sizes="192x192">
-<link rel="stylesheet" href="styles.css?v=2026-10-26T22%3A28%3A27">
+<link rel="stylesheet" href="styles.css?v=2026-10-26T22%3A49%3A25">
 </head>
 <body>
 <div id="app">
   <!-- 顶部渐变卡：对齐安卓 3.14（标题 + 诊室/分享/设置，姓名查询，医生/报告员 + 导入） -->
   <header class="hero">
     <div class="hero-top">
-      <h1>查班小助手</h1>
+      <div class="hero-title">
+        <h1>查班小助手</h1>
+        <span id="modePill" class="mode-pill">医生</span>
+      </div>
       <div class="hero-icons">
         <button id="btnRefresh" class="icon-btn" type="button" aria-label="刷新" title="刷新">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -189,7 +192,7 @@
 
   <div class="set-section">
     <div class="set-title">给用安卓的同事</div>
-    <p class="hint">安卓最新版 v3.31。旧版本的应用内更新可能失效，复制安装包直链发给他们手动覆盖安装。</p>
+    <p class="hint">安卓最新版 v3.32。旧版本的应用内更新可能失效，复制安装包直链发给他们手动覆盖安装。</p>
     <div class="dlg-actions">
       <button id="btnCopyApkFromSettings" class="btn-ghost solid" type="button">复制安装包直链</button>
       <button id="btnOpenApkPage" class="btn-primary" type="button">直接下载安装包</button>
@@ -254,9 +257,9 @@
 <!-- 版本与更新日志 -->
 <dialog id="dlgVersion">
   <h3>版本与更新</h3>
-  <p class="dlg-sub" id="verSub">网页版 v3.31</p>
-  <div class="set-row"><span>网页版</span><b id="verPwa">v3.31</b></div>
-  <div class="set-row"><span>安卓最新版</span><b id="verAndroid">v3.31</b></div>
+  <p class="dlg-sub" id="verSub">网页版 v3.32</p>
+  <div class="set-row"><span>网页版</span><b id="verPwa">v3.32</b></div>
+  <div class="set-row"><span>安卓最新版</span><b id="verAndroid">v3.32</b></div>
 
   <div class="ver-notes">
     <b>网页版更新方式</b>
@@ -267,7 +270,7 @@
   </div>
 
   <div class="ver-warn">
-    <b>安卓旧版本（低于 v3.31）请手动更新</b>
+    <b>安卓旧版本（低于 v3.32）请手动更新</b>
     <p id="verLegacy">旧版应用内更新可能失效，请复制安装包直链到浏览器手动安装。</p>
     <code id="verLink"></code>
     <div class="dlg-actions">
@@ -324,6 +327,6 @@
 
 <input id="filePicker" type="file" accept=".xlsx,.xls,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
 
-<script type="module" src="app.js?v=2026-10-26T22%3A28%3A27"></script>
+<script type="module" src="app.js?v=2026-10-26T22%3A49%3A25"></script>
 </body>
 </html>

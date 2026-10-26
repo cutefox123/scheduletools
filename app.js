@@ -1,8 +1,8 @@
 // 查班小助手 PWA —— 主逻辑
 // 解析全部在本地完成（js/xlsx.js、js/xls.js、js/parser.js、js/rooms.js），数据只存 localStorage。
 
-import { fetchWeather } from './weather.js?v=2026-10-26T22%3A28%3A27';
-import { buildTips } from './tips.js?v=2026-10-26T22%3A28%3A27';
+import { fetchWeather } from './weather.js?v=2026-10-26T22%3A49%3A25';
+import { buildTips } from './tips.js?v=2026-10-26T22%3A49%3A25';
 
 const K = {
   doctorRows: 'sa.doctorRows',
@@ -23,6 +23,8 @@ const K = {
   histD: 'sa.histD.',    // + 首日 → 那一周的医生表 rows
   histR: 'sa.histR.',    // + 首日 → 那一周的报告员表 rows
   repName: 'sa.repName', // 最近一次查的报告员（报告员的班直接画在首页，靠它记住人）
+  kwDoctor: 'sa.kwDoctor',   // 查询框关键字·医生（v3.32，切模式不再清空）
+  kwReporter: 'sa.kwReporter', // 查询框关键字·报告员
   week: 'sa.week',       // 正在看哪一周（'' = 本周），刷新后保持
   roomQuery: 'sa.roomQuery', // 诊室查询上次的关键字，退出再进来还留着
 };
@@ -47,8 +49,8 @@ const TYPE_STYLE_DARK = {
 const $ = (id) => document.getElementById(id);
 
 // 版本跟进：网页版与安卓正式版保持同一个版本号，构建戳只用于判断“网页有没有更新”。
-const APP_VERSION = '3.31';
-const ANDROID_VERSION = '3.31';
+const APP_VERSION = '3.32';
+const ANDROID_VERSION = '3.32';
 // 安卓安装包直链：COS 不允许 .apk 后缀，.bin 就是 APK 本体，Content-Disposition 会还原文件名。
 const ANDROID_APK_URL =
   'https://lovenest-1500804548.cos.ap-guangzhou.myqcloud.com/schedule/scheduleassistant-latest.bin';
@@ -238,6 +240,36 @@ let state = {
   weekKey: store.get(K.week, ''), // '' = 本周；其余是历史周首日 yyyy-MM-dd
 };
 
+// ---------- 视角：关键字 + 配色（v3.32） ----------
+
+/**
+ * 查询框该显示什么。
+ * 优先用这一模式自己记下的关键字；从没敲过就退回「正在看的那个人」，
+ * 让框里永远有内容——用户反复要的就是这个。
+ */
+function keywordOf(kind) {
+  const saved = kind === 'reporter' ? store.get(K.kwReporter, '') : store.get(K.kwDoctor, '');
+  if (saved) return saved;
+  return kind === 'reporter' ? (state.repName || '') : store.get(K.name, '');
+}
+
+/** 记住当前视角的关键字（reporters 用当前 state.kind 判定，不用额外参数）。 */
+function rememberKeyword(text) {
+  const key = state.kind === 'reporter' ? K.kwReporter : K.kwDoctor;
+  store.set(key, (text || '').trim());
+}
+
+/**
+ * 视角换色：报告员整页换成分享海报那套青绿，医生的品牌蓝不动。
+ * 只切一个 body class，具体颜色全在 styles.css 的 body.reporter 里。
+ */
+function paintMode() {
+  const reporter = state.kind === 'reporter';
+  document.body.classList.toggle('reporter', reporter);
+  const pill = $('modePill');
+  if (pill) pill.textContent = reporter ? '报告员' : '医生';
+}
+
 // ---------- 工具 ----------
 function toast(msg) {
   const el = document.createElement('div');
@@ -324,10 +356,10 @@ async function loadModules() {
       return false;
     }
   };
-  await load('xlsx', './xlsx.js?v=2026-10-26T22%3A28%3A27');
-  await load('xls', './xls.js?v=2026-10-26T22%3A28%3A27');
-  await load('parser', './parser.js?v=2026-10-26T22%3A28%3A27');
-  await load('rooms', './rooms.js?v=2026-10-26T22%3A28%3A27');
+  await load('xlsx', './xlsx.js?v=2026-10-26T22%3A49%3A25');
+  await load('xls', './xls.js?v=2026-10-26T22%3A49%3A25');
+  await load('parser', './parser.js?v=2026-10-26T22%3A49%3A25');
+  await load('rooms', './rooms.js?v=2026-10-26T22%3A49%3A25');
   if (!mod.parser) {
     toast('解析模块未就绪，页面仍可打开');
   }
@@ -446,6 +478,7 @@ async function importAs(kind) {
   if (!saved || (names.length && !names.includes(saved))) {
     await pickPerson(names, async (picked) => {
       store.set(K.name, picked);
+      rememberKeyword(picked);
       $('nameInput').value = picked;
       await renderWeek({ keepName: true });
     }, '导入成功，选一下你自己的姓名');
@@ -918,6 +951,7 @@ async function onQuery() {
   if (!name) { toast(state.kind === 'reporter' ? '请输入报告员姓名' : '请输入医生姓名'); return; }
   if (state.kind === 'reporter') { await queryReporter(name); return; }
   store.set(K.name, name);
+  rememberKeyword(name);
   await renderWeek();
   toast('已切换到「' + name + '」');
 }
@@ -941,6 +975,9 @@ async function queryReporter(name) {
   if (!doctorRowsOf(wk)) { toast(wk ? '这一周没有存档的医生表' : '还没导入医生排班表'); return; }
   state.repName = hit;
   store.set(K.repName, hit);
+  // 只敲了姓也会补成全名：把全名记成关键字，下次打开框里就是完整的人。
+  rememberKeyword(hit);
+  $('nameInput').value = hit;
   await renderWeek();
   toast('已切换到「' + hit + '」');
 }
@@ -1211,17 +1248,16 @@ function refreshFileStatus() {
 }
 
 function setKind(kind) {
-  const changed = state.kind !== kind;
   state.kind = kind;
   store.set(K.kind, kind);
   document.querySelectorAll('#seg button').forEach((b) => {
     b.classList.toggle('on', b.dataset.kind === kind);
   });
   $('nameInput').placeholder = kind === 'reporter' ? '报告员姓名' : '医生姓名';
-  // 和安卓 3.14 一样：切换医生/报告员时清空上一种查询的姓名。
-  if (changed) {
-    $('nameInput').value = '';
-  }
+  // 不再清空（v3.32）：换视角就把框里的字换成那一份关键字，
+  // 没敲过则换成这个视角正在看的人。清空过一次就被用户投诉过。
+  $('nameInput').value = keywordOf(kind);
+  paintMode();
   // 切模式 = 换一份数据源，界面还是同一个：重新算一遍就完事（v3.30）
   paintCalSwitch();
   renderWeek();
@@ -1654,9 +1690,10 @@ async function init() {
       setWeek('');
     });
   }
-  // 姓名框默认留空：当前查的人记在 K.name 里（周数据按它渲染），
-  // 但不往输入框回填——用户点进来就是要自己输入。
-  $('nameInput').value = '';
+  // 姓名框回填当前视角的关键字（v3.32）：医生/报告员各存一份，
+  // 没敲过就回填正在看的那个人。原来这里强制留空，用户反馈"内容被清空"。
+  $('nameInput').value = keywordOf(state.kind);
+  paintMode();
   $('leadInput').value = store.get(K.lead, '30');
 
   $('btnImport').onclick = () => { pendingHistory = false; $('filePicker').click(); };
@@ -1677,6 +1714,8 @@ async function init() {
   $('pickReporter').onclick = () => importAs('reporter');
   $('btnQuery').onclick = onQuery;
   $('nameInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') onQuery(); });
+  // 每敲一下就记（v3.32）：这个框是"筛选关键字"，不是一次性输入框。
+  $('nameInput').addEventListener('input', (e) => rememberKeyword(e.target.value));
   // 注意别把 click 事件当参数传进去（会被当成 days），一定要包一层
   $('btnCalendar').onclick = () => exportCalendar();
   // 顶部那条日历开关：医生模式导医生的班，报告员模式导报告员的班
@@ -1762,6 +1801,9 @@ async function init() {
     state.weekKey = '';
     paintWeekBar();
     $('nameInput').value = '';
+    // 关键字是"上次查过谁"的痕迹，清空数据时一并抹掉，别留下空壳。
+    store.set(K.kwDoctor, '');
+    store.set(K.kwReporter, '');
     renderList([]);
     refreshFileStatus();
     applyTheme('system', false);
@@ -2169,5 +2211,5 @@ function loadCachedWeek() {
 }
 
 self.__APP_VERSION__ = APP_VERSION;
-self.__APP_BUILD__ = '2026-10-26T22:28:27';
+self.__APP_BUILD__ = '2026-10-26T22:49:25';
 document.addEventListener('DOMContentLoaded', init);
