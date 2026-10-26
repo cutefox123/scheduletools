@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<!-- build:2026-10-26T21:50:43 -->
+<!-- build:2026-10-26T22:28:27 -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
 <title>查班小助手</title>
@@ -31,7 +31,7 @@
 <meta name="format-detection" content="telephone=no">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon-192.png" sizes="192x192">
-<link rel="stylesheet" href="styles.css?v=2026-10-26T21%3A50%3A43">
+<link rel="stylesheet" href="styles.css?v=2026-10-26T22%3A28%3A27">
 </head>
 <body>
 <div id="app">
@@ -103,12 +103,13 @@
   </header>
 
   <!-- 列表 -->
+  <p class="cal-status" id="weekError" hidden></p>
   <main id="weekList" class="week"></main>
 
   <!-- 空状态 -->
   <section id="empty" class="card empty">
-    <h2>还没有排班表</h2>
-    <p>1. 在微信里点开排班 xlsx 文件；<br>
+    <h2 id="emptyTitle">还没有排班表</h2>
+    <p id="emptyText">1. 在微信里点开排班 xlsx 文件；<br>
        2. 右上角「···」→「用其他应用打开」→「存储到“文件”」；<br>
        3. 回到这里点「导入排班表」，从「文件」里选它。</p>
     <button id="btnImportEmpty" class="btn-primary">导入排班表</button>
@@ -136,17 +137,7 @@
   <h3 id="personTitle">查谁的班</h3>
   <input id="personSearch" type="search" placeholder="搜索姓名" autocomplete="off">
   <div id="personList" class="person-list"></div>
-  <div class="rep-cal" id="repCalRow" data-on="false" hidden>
-    <span class="rep-cal-label">日历提醒</span>
-    <span class="rep-cal-hint" id="repCalHint">打开时选提前多久</span>
-    <button id="repCalSw" class="switch switch-light" type="button" role="switch"
-            aria-checked="false" aria-label="报告员日历提醒" title="报告员日历提醒">
-      <span class="switch-knob"></span>
-    </button>
-  </div>
-  <p class="cal-status" id="calStatus" hidden></p>
   <div class="dlg-actions">
-    <button id="btnShareReporter" class="btn-primary" type="button" style="display:none">分享</button>
     <button id="btnClosePerson" class="btn-ghost solid">关闭</button>
   </div>
 </dialog>
@@ -198,7 +189,7 @@
 
   <div class="set-section">
     <div class="set-title">给用安卓的同事</div>
-    <p class="hint">安卓最新版 v3.29。旧版本的应用内更新可能失效，复制安装包直链发给他们手动覆盖安装。</p>
+    <p class="hint">安卓最新版 v3.31。旧版本的应用内更新可能失效，复制安装包直链发给他们手动覆盖安装。</p>
     <div class="dlg-actions">
       <button id="btnCopyApkFromSettings" class="btn-ghost solid" type="button">复制安装包直链</button>
       <button id="btnOpenApkPage" class="btn-primary" type="button">直接下载安装包</button>
@@ -263,9 +254,9 @@
 <!-- 版本与更新日志 -->
 <dialog id="dlgVersion">
   <h3>版本与更新</h3>
-  <p class="dlg-sub" id="verSub">网页版 v3.29</p>
-  <div class="set-row"><span>网页版</span><b id="verPwa">v3.29</b></div>
-  <div class="set-row"><span>安卓最新版</span><b id="verAndroid">v3.29</b></div>
+  <p class="dlg-sub" id="verSub">网页版 v3.31</p>
+  <div class="set-row"><span>网页版</span><b id="verPwa">v3.31</b></div>
+  <div class="set-row"><span>安卓最新版</span><b id="verAndroid">v3.31</b></div>
 
   <div class="ver-notes">
     <b>网页版更新方式</b>
@@ -276,7 +267,7 @@
   </div>
 
   <div class="ver-warn">
-    <b>安卓旧版本（低于 v3.29）请手动更新</b>
+    <b>安卓旧版本（低于 v3.31）请手动更新</b>
     <p id="verLegacy">旧版应用内更新可能失效，请复制安装包直链到浏览器手动安装。</p>
     <code id="verLink"></code>
     <div class="dlg-actions">
@@ -309,8 +300,23 @@
 <!-- 选择周 -->
 <dialog id="dlgWeek">
   <h3>看哪一周</h3>
-  <p class="dlg-sub">每周导入的排班表会自动留一份（最近 8 周），翻旧班表不用再找文件。</p>
+  <p class="dlg-sub">每次导入的排班表都会自动留一份，翻旧班表不用再找文件。</p>
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin:2px 2px 8px">
+    <span style="font-size:13px">历史周保留</span>
+    <select id="histKeepSel" aria-label="历史周保留数量"
+            style="max-width:58%;padding:6px 8px;border-radius:10px;border:1px solid var(--border);background:#fff;font-size:13px">
+      <option value="0">不限</option>
+      <option value="4">最近 4 周</option>
+      <option value="8">最近 8 周</option>
+      <option value="12">最近 12 周</option>
+      <option value="26">最近 26 周</option>
+      <option value="52">最近 52 周</option>
+    </select>
+  </div>
   <div id="weekPickList" class="person-list"></div>
+  <button id="btnImportHistory" class="btn-ghost solid" type="button"
+          style="margin-top:10px">手动导入历史表</button>
+  <p class="hint" style="margin:4px 2px 0;font-size:11.5px">补以前的旧表：只存进它自己那一周，不动首页现在的这一周。</p>
   <div class="dlg-actions">
     <button id="btnCloseWeek" class="btn-ghost solid">关闭</button>
   </div>
@@ -318,6 +324,6 @@
 
 <input id="filePicker" type="file" accept=".xlsx,.xls,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
 
-<script type="module" src="app.js?v=2026-10-26T21%3A50%3A43"></script>
+<script type="module" src="app.js?v=2026-10-26T22%3A28%3A27"></script>
 </body>
 </html>

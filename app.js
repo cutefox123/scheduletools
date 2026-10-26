@@ -1,8 +1,8 @@
 // 查班小助手 PWA —— 主逻辑
 // 解析全部在本地完成（js/xlsx.js、js/xls.js、js/parser.js、js/rooms.js），数据只存 localStorage。
 
-import { fetchWeather } from './weather.js?v=2026-10-26T21%3A50%3A43';
-import { buildTips } from './tips.js?v=2026-10-26T21%3A50%3A43';
+import { fetchWeather } from './weather.js?v=2026-10-26T22%3A28%3A27';
+import { buildTips } from './tips.js?v=2026-10-26T22%3A28%3A27';
 
 const K = {
   doctorRows: 'sa.doctorRows',
@@ -19,8 +19,10 @@ const K = {
   calOn: 'sa.calOn', // 首页「医生日历提醒」开关：记本周（周一日期），换周自动算关闭
   repCalKey: 'sa.repCalKey', // 报告员开关：记「姓名|首日」，换人/换周自动关闭
   hist: 'sa.hist',       // 历史周索引：[{key,last,doctor,reporter,savedAt}]
+  histKeep: 'sa.histKeep', // 历史周保留数量：0/空 = 不限（v3.31 起由用户自己设）
   histD: 'sa.histD.',    // + 首日 → 那一周的医生表 rows
   histR: 'sa.histR.',    // + 首日 → 那一周的报告员表 rows
+  repName: 'sa.repName', // 最近一次查的报告员（报告员的班直接画在首页，靠它记住人）
   week: 'sa.week',       // 正在看哪一周（'' = 本周），刷新后保持
   roomQuery: 'sa.roomQuery', // 诊室查询上次的关键字，退出再进来还留着
 };
@@ -45,8 +47,8 @@ const TYPE_STYLE_DARK = {
 const $ = (id) => document.getElementById(id);
 
 // 版本跟进：网页版与安卓正式版保持同一个版本号，构建戳只用于判断“网页有没有更新”。
-const APP_VERSION = '3.29';
-const ANDROID_VERSION = '3.29';
+const APP_VERSION = '3.31';
+const ANDROID_VERSION = '3.31';
 // 安卓安装包直链：COS 不允许 .apk 后缀，.bin 就是 APK 本体，Content-Disposition 会还原文件名。
 const ANDROID_APK_URL =
   'https://lovenest-1500804548.cos.ap-guangzhou.myqcloud.com/schedule/scheduleassistant-latest.bin';
@@ -78,7 +80,6 @@ const store = {
 
 let mod = {};          // 动态加载的解析模块
 let repCache = null;   // 报告员表解析结果缓存（导入时失效）
-let reporterShare = null; // 报告员周视图当前分享的数据
 
 function getReporterResult() {
   if (repCache !== null) return repCache;
@@ -92,10 +93,43 @@ function getReporterResult() {
 function invalidateReporter() { repCache = null; }
 
 // ---------- 历史周（v3.29） ----------
-// 每次导入的表按「日期表头算出的首日」归档一份，最多留 8 周。
+// 每次导入的表按「日期表头算出的首日」归档一份。
 // 规则与安卓侧的 WeekArchive / Store.History 一致：医生表和报告员表首日
 // 一般相同，自然落到同一条；差 3 天以内也合并，避免出现两条半空的记录。
-const HIST_KEEP = 8;
+// 保留多少周由用户自己定（v3.31）：0 / 空 = 不限，改小了会立刻裁掉更早的。
+const HIST_KEEP_MAX = 104;
+
+function histKeep() {
+  const n = Math.floor(Number(store.get(K.histKeep, '0')));
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.min(HIST_KEEP_MAX, n);
+}
+
+/** 按当前设置裁掉更早的周（连同两张矩阵）。0 = 不动。 */
+function trimHistory(list) {
+  const keep = histKeep();
+  if (!keep) return list;
+  const out = list.slice().sort((a, b) => b.key.localeCompare(a.key));
+  while (out.length > keep) {
+    const old = out.pop();
+    store.del(K.histD + old.key);
+    store.del(K.histR + old.key);
+  }
+  return out;
+}
+
+/** 删掉某一周的存档：索引 + 医生表 + 报告员表一起删。返回是否真的删了。 */
+function removeHist(key) {
+  if (!key) return false;
+  const list = histIndex();
+  const i = list.findIndex((e) => e.key === key);
+  if (i < 0) return false;
+  list.splice(i, 1);
+  store.del(K.histD + key);
+  store.del(K.histR + key);
+  store.setJson(K.hist, list);
+  return true;
+}
 
 /** 这张表属于哪一周（首末日）。规则在 parser.js 里，和安卓 WeekArchive 对齐。 */
 function weekSpanOf(matrix) {
@@ -140,13 +174,7 @@ function archiveWeek(kind, rows) {
   hit.savedAt = Date.now();
   if (kind === 'reporter') hit.reporter = true; else hit.doctor = true;
   store.setJson((kind === 'reporter' ? K.histR : K.histD) + hit.key, rows);
-  list.sort((a, b) => b.key.localeCompare(a.key));
-  while (list.length > HIST_KEEP) {
-    const old = list.pop();
-    store.del(K.histD + old.key);
-    store.del(K.histR + old.key);
-  }
-  store.setJson(K.hist, list);
+  store.setJson(K.hist, trimHistory(list));
 }
 
 /** 当前这份医生表属于哪一周（列表第一项「本周」用它）。 */
@@ -201,9 +229,9 @@ function weekTitleOf(weekKey) {
 
 let state = {
   days: [],
-  reporterDays: null,   // 报告员查询结果
-  reporterName: '',     // 最近一次查询的报告员姓名（日历导出用）
-  reporterShiftDays: [],// 最近一次查询的报告员班次（写入日历用）
+  repDays: [],          // 报告员模式下的这一周（和医生共用同一套日卡）
+  repName: store.get(K.repName, ''), // 最近一次查的报告员
+  repError: '',         // 报告员这一周读不出来时的提示
   kind: store.get(K.kind, 'doctor'),
   weather: store.json(K.weather, {}),
   weatherAt: Number(store.get(K.weatherAt, '0')),
@@ -296,10 +324,10 @@ async function loadModules() {
       return false;
     }
   };
-  await load('xlsx', './xlsx.js?v=2026-10-26T21%3A50%3A43');
-  await load('xls', './xls.js?v=2026-10-26T21%3A50%3A43');
-  await load('parser', './parser.js?v=2026-10-26T21%3A50%3A43');
-  await load('rooms', './rooms.js?v=2026-10-26T21%3A50%3A43');
+  await load('xlsx', './xlsx.js?v=2026-10-26T22%3A28%3A27');
+  await load('xls', './xls.js?v=2026-10-26T22%3A28%3A27');
+  await load('parser', './parser.js?v=2026-10-26T22%3A28%3A27');
+  await load('rooms', './rooms.js?v=2026-10-26T22%3A28%3A27');
   if (!mod.parser) {
     toast('解析模块未就绪，页面仍可打开');
   }
@@ -327,17 +355,67 @@ async function handleFile(file) {
     return;
   }
   pendingRows = { rows, fileName: file.name };
-  $('pickedFileName').textContent = '已选择：' + file.name;
+  $('pickedFileName').textContent = '已选择：' + file.name
+    + (pendingHistory ? '（存进历史，不动本周）' : '');
   $('dlgKind').showModal();
 }
 
 let pendingRows = null;
+/** 这次选的文件是「手动导入历史表」：只归档，不动当前这一周。 */
+let pendingHistory = false;
+
+/**
+ * 手动导入历史表（v3.30）：把以前的旧表补进它自己那一周。
+ *
+ * 自动归档只发生在「导入排班表」时，而那时这张表必然会变成当前周——
+ * 想补一张更早的旧表就没路可走。这里只归档、只读，绝不碰手头这两张表。
+ */
+async function importHistoryOnly(kind, rows, fileName) {
+  const span = weekSpanOf(rows);
+  if (!span) { toast('表里没找到日期，确认是排班表本身'); return; }
+  const label = weekRangeOf(span.key, span.last);
+  if (kind === 'reporter') {
+    const rep = mod.parser?.parseReporter ? mod.parser.parseReporter(rows) : null;
+    if (!rep || !rep.ok) { toast(rep?.error || '报告员表读不出来'); return; }
+  } else {
+    const names = mod.parser?.doctorNames ? mod.parser.doctorNames(rows) : [];
+    if (!names.length) { toast('没识别到医生姓名，确认这是医生排班表'); return; }
+  }
+  const cur = currentWeekKey();
+  if (cur) {
+    if (cur === span.key) {
+      toast('这张表就是本周（' + label + '），直接点「导入排班表」就行');
+      return;
+    }
+    if (span.key > cur) {
+      toast('这张表比手头这份更新（' + label + '），用「导入排班表」把它当本周');
+      return;
+    }
+  }
+  archiveWeek(kind, rows);
+  const count = kind === 'reporter'
+    ? (mod.parser.parseReporter(rows).entries || []).length
+    : span.days;
+  toast(kind === 'reporter'
+    ? '已存进历史：报告员表 · ' + label + '（' + count + ' 人）'
+    : '已存进历史：医生表 · ' + label + '（' + count + ' 天）');
+  if (span.key !== (state.weekKey || '')) {
+    await setWeek(span.key);
+  } else {
+    await renderWeek();
+  }
+}
 
 async function importAs(kind) {
   if (!pendingRows) return;
   const { rows, fileName } = pendingRows;
   pendingRows = null;
   $('dlgKind').close();
+  if (pendingHistory) {
+    pendingHistory = false;
+    await importHistoryOnly(kind, rows, fileName);
+    return;
+  }
 
   if (kind === 'reporter') {
     if (!mod.parser?.parseReporter) { toast('解析模块未就绪'); return; }
@@ -379,6 +457,12 @@ async function importAs(kind) {
 
 // ---------- 渲染一周 ----------
 async function renderWeek({ keepName = false } = {}) {
+  // 报告员模式：查的是谁、看哪一周，都按「报告员姓名 + 当前周」重算，
+  // 然后走同一个 renderList（v3.30：不再弹独立的「报告员一周」弹窗）。
+  if (state.kind === 'reporter') {
+    renderReporterWeek();
+    return;
+  }
   const wk = state.weekKey;
   const rows = doctorRowsOf(wk);
   const name = store.get(K.name, '');
@@ -404,15 +488,82 @@ async function renderWeek({ keepName = false } = {}) {
   renderList(res.days);
 }
 
+/**
+ * 报告员模式：把「这个人这一周」算出来，交给同一个 renderList 画。
+ *
+ * 只有数据来源和医生不同，卡片、日期块、班次徽章、长按复制全是同一套——
+ * 两个模式来回切，看到的就是同一个界面。
+ */
+function renderReporterWeek() {
+  const wk = state.weekKey || '';
+  state.repError = '';
+  const rows = reporterRowsOf(wk);
+  if (!rows) {
+    state.repDays = [];
+    state.repError = wk ? '这一周没有存档的报告员表' : '';
+    renderList([]);
+    return;
+  }
+  if (!state.repName) {
+    state.repDays = [];
+    renderList([]);
+    return;
+  }
+  if (!mod.parser?.parseReporter || !mod.parser?.reporterWeek) {
+    state.repDays = [];
+    renderList([]);
+    return;
+  }
+  const rep = mod.parser.parseReporter(rows);
+  if (!rep.ok) {
+    state.repDays = [];
+    state.repError = rep.error || '报告员表读不出来';
+    renderList([]);
+    return;
+  }
+  const names = mod.parser.reporterNames(rep);
+  const hit = names.find((n) => n === state.repName)
+    || names.find((n) => n.includes(state.repName));
+  if (!hit) {
+    state.repDays = [];
+    state.repError = '报告员表里没找到「' + state.repName + '」';
+    renderList([]);
+    return;
+  }
+  const doctorRows = doctorRowsOf(wk);
+  if (!doctorRows) {
+    state.repDays = [];
+    state.repError = wk ? '这一周没有存档的医生表（报告员要和医生表配搭档）' : '';
+    renderList([]);
+    return;
+  }
+  const res = mod.parser.reporterWeek(doctorRows, rep, hit);
+  if (!res.ok) {
+    state.repDays = [];
+    state.repError = res.error || '查不到';
+    renderList([]);
+    return;
+  }
+  state.repName = hit;
+  store.set(K.repName, hit);
+  state.repDays = res.days || [];
+  renderList(state.repDays);
+}
+
 function renderList(days) {
   paintCalSwitch();
   const list = $('weekList');
   list.innerHTML = '';
+  paintEmptyHint(days.length);
   $('empty').style.display = days.length ? 'none' : 'block';
   if (!days.length) return;
 
+  if (state.kind === 'reporter') {
+    renderReporterList(days);
+    return;
+  }
+
   const today = todayYmd();
-  const reporterDays = state.reporterDays;
 
   for (const d of days) {
     const styles = isDarkTheme() ? TYPE_STYLE_DARK : TYPE_STYLE;
@@ -449,6 +600,104 @@ function renderList(days) {
   }
 }
 
+/**
+ * 报告员的一周：画法和医生完全一样（同一套 .day 结构与样式），
+ * 只是没有天气行、没有提示块——那些是医生当天才有的东西。
+ */
+function renderReporterList(days) {
+  const styles = isDarkTheme() ? TYPE_STYLE_DARK : TYPE_STYLE;
+  const today = todayYmd();
+  const list = $('weekList');
+  for (const d of days) {
+    const raw = d.raw || '';
+    // 整格班次：和医生卡片同一套 fillShift，配色/徽章才对得上
+    const probe = { ymd: d.ymd, raw, type: 'REST', startTime: null, preTime: null, workInfo: '' };
+    try { mod.parser.fillShift(probe, raw, 0); } catch { /* 认不出按休息 */ }
+    const style = styles[probe.type] || styles.REST;
+    const isToday = !state.weekKey && d.ymd === today;
+    const partner = reporterPartnerLine(d);
+    const ymd = d.ymd || '';
+    const dateText = ymd.length >= 10
+      ? Number(ymd.slice(5, 7)) + '.' + Number(ymd.slice(8, 10))
+      : (d.dateLabel || '');
+    const weekText = (d.weekLabel || '').replace('星期天', '周日').replace('星期', '周');
+    const el = document.createElement('section');
+    el.className = 'day';
+    if (isToday) el.style.borderColor = 'rgba(75,107,245,.45)';
+    el.innerHTML = `
+      <div class="day-head">
+        <div class="dateblock" style="background:${style.bg};color:${style.fg}">
+          <span class="w">${escapeHtml(weekText)}</span>
+          <span class="d">${escapeHtml(dateText)}</span>
+        </div>
+        ${isToday ? '<span class="hint" style="align-self:center;font-size:11px">今天</span>' : ''}
+        <span class="badge" style="background:${style.bg};color:${style.fg}">${style.label}</span>
+      </div>
+      <p class="day-raw">${escapeHtml(raw || '（单元格为空）')}</p>
+      ${probe.type !== 'REST' && probe.workInfo ? `<p class="day-line">${escapeHtml(probe.workInfo)}</p>` : ''}
+      ${partner ? `<p class="day-line">${escapeHtml(partner)}</p>` : ''}
+    `;
+    attachLongPress(el, () => copyReporterDay(d, probe, style));
+    list.appendChild(el);
+  }
+}
+
+/** 长按复制报告员某一天（和医生那张卡的复制内容同一套字段）。 */
+function copyReporterDay(d, probe, style) {
+  const head = [
+    (d.weekLabel || '').replace('星期', '周'),
+    mdOf(d.ymd),
+    style ? style.label : '',
+  ].filter(Boolean).join(' ');
+  const lines = [head];
+  if (d.raw) lines.push('表内写法：' + d.raw);
+  if (probe && probe.type !== 'REST' && probe.workInfo) lines.push('时段：' + probe.workInfo);
+  const partner = reporterPartnerLine(d);
+  if (partner) lines.push(partner);
+  const text = lines.join('\n');
+  const done = () => toast('已复制：' + head);
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done).catch(() => fallbackCopy(text, done));
+  } else {
+    fallbackCopy(text, done);
+  }
+}
+
+/** 空状态文案随模式变：医生讲怎么导入，报告员讲怎么查人。 */
+function paintEmptyHint(hasDays) {
+  if (hasDays) return;
+  const title = $('emptyTitle');
+  const text = $('emptyText');
+  if (!title || !text) return;
+  const btn = $('btnImportEmpty');
+  if (state.kind === 'reporter') {
+    const hasReporter = !!store.json(K.reporterRows, null);
+    title.textContent = hasReporter ? '查一下报告员的班' : '还没有报告员表';
+    text.innerHTML = hasReporter
+      ? '在上面输入报告员姓名，点「查询」；<br>也可以点姓名框，直接从名单里挑一个。'
+      : '1. 在微信里点开报告员表（xls）文件；<br>'
+        + '2. 右上角「···」→「用其他应用打开」→「存储到“文件”」；<br>'
+        + '3. 回到这里点「导入排班表」，选「报告员表」。';
+    if (btn) btn.textContent = hasReporter ? '去导入报告员表' : '导入排班表';
+    const err = $('weekError');
+    if (err) {
+      err.hidden = !state.repError;
+      err.textContent = state.repError || '';
+    }
+    return;
+  }
+  title.textContent = '还没有排班表';
+  text.innerHTML = '1. 在微信里点开排班 xlsx 文件；<br>'
+    + '2. 右上角「···」→「用其他应用打开」→「存储到“文件”」；<br>'
+    + '3. 回到这里点「导入排班表」，从「文件」里选它。';
+  if (btn) btn.textContent = '导入排班表';
+  const err = $('weekError');
+  if (err) {
+    err.hidden = true;
+    err.textContent = '';
+  }
+}
+
 // ---------- 周切换条（首页 + 诊室弹窗共用） ----------
 function paintWeekBar() {
   const wk = state.weekKey || '';
@@ -472,15 +721,27 @@ function paintWeekBar() {
   if (calRow) calRow.style.display = wk ? 'none' : '';
 }
 
+/**
+ * 周列表：选周、删周、改保留数量。
+ *
+ * 数量由用户自己定（`sa.histKeep`，0 = 不限）——以前硬限 8 周，翻不到更早的
+ * 旧班表；现在默认不限，想控空间就在这里调小，调小会立刻删掉更早的存档。
+ */
 function openWeekPicker() {
   const wrap = $('weekPickList');
   wrap.innerHTML = '';
+  const sel = $('histKeepSel');
+  if (sel) sel.value = String(histKeep());
   const list = historyOptions();
   if (!list.length) {
-    wrap.innerHTML = '<p class="hint" style="padding:8px 2px">还没有排班表——导入一张，这一周就会被记下来。</p>';
+    wrap.innerHTML = '<p class="hint" style="padding:8px 2px">还没有排班表——导入一张，这一周就会被记下来；'
+      + '以前的旧表用下面「手动导入历史表」补进来。</p>';
   }
   for (const w of list) {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:6px';
     const b = document.createElement('button');
+    b.style.flex = '1';
     const tags = [w.doctor ? '医生表' : '', w.reporter ? '报告员表' : ''].filter(Boolean).join(' · ');
     b.innerHTML = (w.key
       ? escapeHtml(w.label)
@@ -491,7 +752,26 @@ function openWeekPicker() {
       $('dlgWeek').close();
       setWeek(w.key);
     };
-    wrap.appendChild(b);
+    row.appendChild(b);
+    // 本周是手头这两张表，不提供删除；历史周可以自己删
+    if (w.key) {
+      const del = document.createElement('button');
+      del.className = 'btn-ghost solid';
+      del.type = 'button';
+      del.textContent = '删';
+      del.title = '删掉这一周的存档';
+      del.style.cssText = 'flex:0 0 auto;padding:8px 10px;min-width:0';
+      del.onclick = async () => {
+        if (!confirm(`删掉 ${w.label} 这一周的存档？医生表和报告员表会一起删掉，删了只能重新导入。`)) return;
+        if (!removeHist(w.key)) { toast('这一周本来就不在历史里'); return; }
+        toast(`已删掉 ${w.label} 的存档`);
+        if ((state.weekKey || '') === w.key) await setWeek('');
+        $('dlgWeek').close();
+        openWeekPicker();
+      };
+      row.appendChild(del);
+    }
+    wrap.appendChild(row);
   }
   $('dlgWeek').showModal();
 }
@@ -609,11 +889,7 @@ async function refreshAll() {
 // ---------- 查询 / 换人 ----------
 async function pickPerson(names, onPick, title) {
   const dlg = $('dlgPerson');
-  reporterShare = null;
-  $('btnShareReporter').style.display = 'none';
   $('personTitle').textContent = title || '查谁的班';
-  setCalStatus('');
-  setRepCalVisible(false);
   $('personSearch').value = '';
   $('personSearch').style.display = '';
   const listEl = $('personList');
@@ -646,6 +922,12 @@ async function onQuery() {
   toast('已切换到「' + name + '」');
 }
 
+/**
+ * 查报告员：只做「校验 + 记住这个人」，剩下的交给 renderWeek——
+ * 报告员的班和医生一样直接画在首页上（v3.30），不再弹独立弹窗。
+ * 日历班次也直接从界面上的这一周取（见 exportCalendar(state.repDays)），
+ * 页面看到什么就写什么。
+ */
 async function queryReporter(name) {
   const wk = state.weekKey || '';
   const rows = reporterRowsOf(wk);
@@ -656,100 +938,18 @@ async function queryReporter(name) {
   const names = mod.parser.reporterNames(rep);
   const hit = names.find((n) => n === name) || names.find((n) => n.includes(name));
   if (!hit) { toast('报告员表里没找到「' + name + '」'); return; }
-  const doctorRows = doctorRowsOf(wk);
-  if (!doctorRows) { toast(wk ? '这一周没有存档的医生表' : '还没导入医生排班表'); return; }
-  const res = mod.parser.reporterWeek(doctorRows, rep, hit);
-  if (!res.ok) { toast(res.error || '查不到'); return; }
-  // 日历班次直接用弹窗上显示的这一周拼（日期和原始格子文本都来自同一处），
-  // 保证「页面看到什么就写什么」。raw 必须是"4诊/6诊"这种格子文本，
-  // 用位置名（"东区/西区"）算不出上下班时间，写出来是 0 条。
-  const repDays = (res.days || []).map((d) => {
-    const raw = d.raw || '';
-    const o = { ymd: d.ymd, raw, type: 'REST', startTime: null, preTime: null, workInfo: '' };
-    try { mod.parser.fillShift(o, raw, 0); } catch { /* 解析失败按休息 */ }
-    return o;
-  });
-  state.reporterName = hit;
-  state.reporterShiftDays = repDays;
-  showReporterWeek(hit, res.days);
+  if (!doctorRowsOf(wk)) { toast(wk ? '这一周没有存档的医生表' : '还没导入医生排班表'); return; }
+  state.repName = hit;
+  store.set(K.repName, hit);
+  await renderWeek();
+  toast('已切换到「' + hit + '」');
 }
 
 // ---------- 报告员周 → 日历班次（与安卓侧同一套规则） ----------
 
-/** 报告员格转显示文本：纯数字的半天补“诊”（6→6诊），其余原样。 */
-function reporterRawText(cell) {
-  const t = String(cell || '').replace(/\s+/g, '');
-  if (!t) return '';
-  return t.split('/').map((h) => (/^\d+$/.test(h) ? h + '诊' : h)).join('/');
-}
-
-/** 把报告员一周格子转成和医生周同构的 days（供 ics 导出 / 无感询问共用）。 */
-function reporterShiftDays(rep, hit) {
-  if (!rep || !Array.isArray(rep.entries)) return [];
-  const entry = rep.entries.find((e) => e.name === hit)
-    || rep.entries.find((e) => hit.includes(e.name) || e.name.includes(hit));
-  if (!entry) return [];
-  const days = [];
-  for (let i = 0; i < rep.ymds.length && i < entry.cells.length; i++) {
-    const raw = reporterRawText(entry.cells[i]);
-    const d = { ymd: rep.ymds[i], raw, type: 'REST', startTime: null, preTime: null, workInfo: '' };
-    try { mod.parser.fillShift(d, raw, 0); } catch { /* 解析失败按休息 */ }
-    days.push(d);
-  }
-  return days;
-}
-
 function todayStr() {
   const d = new Date();
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-}
-
-function showReporterWeek(name, days) {
-  const dlg = $('dlgPerson');
-  const wk = state.weekKey || '';
-  reporterShare = { name, days: days || [] };
-  $('personTitle').textContent = name + ' · ' + weekTitleOf(wk);
-  setCalStatus('');
-  $('personSearch').style.display = 'none';
-  const hasDays = days && days.length;
-  // 历史周只看不写日历：日历里现在装的是本周的班，别被旧班表覆盖
-  setRepCalVisible(!!hasDays && !wk);
-  $('btnShareReporter').style.display = hasDays ? '' : 'none';
-  const listEl = $('personList');
-  listEl.innerHTML = '';
-  const styles = isDarkTheme() ? TYPE_STYLE_DARK : TYPE_STYLE;
-  const today = todayYmd();
-  for (const d of days || []) {
-    // 整格班次 / 时段：和医生卡片同一套 fillShift，版式才完全一致
-    const raw = d.raw || '';
-    const probe = { ymd: d.ymd, raw, type: 'REST', startTime: null, preTime: null, workInfo: '' };
-    try { mod.parser.fillShift(probe, raw, 0); } catch { /* 认不出按休息 */ }
-    const style = styles[probe.type] || styles.REST;
-    const isToday = !wk && d.ymd === today;
-    const partner = reporterPartnerLine(d);
-    const ymd = d.ymd || '';
-    const dateText = ymd.length >= 10
-      ? Number(ymd.slice(5, 7)) + '.' + Number(ymd.slice(8, 10))
-      : (d.dateLabel || '');
-    const weekText = (d.weekLabel || '').replace('星期天', '周日').replace('星期', '周');
-    const section = document.createElement('section');
-    section.className = 'day';
-    if (isToday) section.style.borderColor = 'rgba(75,107,245,.45)';
-    section.innerHTML = `
-      <div class="day-head">
-        <div class="dateblock" style="background:${style.bg};color:${style.fg}">
-          <span class="w">${escapeHtml(weekText)}</span>
-          <span class="d">${escapeHtml(dateText)}</span>
-        </div>
-        <span class="badge" style="background:${style.bg};color:${style.fg}">${style.label}</span>
-      </div>
-      <p class="day-raw">${escapeHtml(raw || '（单元格为空）')}</p>
-      ${probe.workInfo && probe.type !== 'REST' ? `<p class="day-line">${escapeHtml(probe.workInfo)}</p>` : ''}
-      ${partner ? `<p class="day-line">${escapeHtml(partner)}</p>` : ''}
-    `;
-    listEl.appendChild(section);
-  }
-  dlg.showModal();
 }
 
 /** 报告员搭档：上午下午一样就合成一行，不一样分半天写。 */
@@ -762,15 +962,6 @@ function reporterPartnerLine(d) {
   if (am.length) parts.push('上午 ' + am.join('、'));
   if (pm.length) parts.push('下午 ' + pm.join('、'));
   return '搭档：' + parts.join('　·　');
-}
-
-function placeText(half, withPartners = true) {
-  if (!half || !half.place || half.place === '休') return '休息';
-  const mid = { '中': '中班', '东中': '东院中班', '西中': '西院中班', '值中': '值班中班' }[half.place];
-  const place = mid || half.place;
-  if (!withPartners) return place;
-  const partners = (half.partners || []).join('、');
-  return place + (partners ? `　·　搭档：${partners}` : '');
 }
 
 // ---------- 导出到系统日历 ----------
@@ -824,23 +1015,18 @@ function buildIcs(days) {
  * 返回 { ok, count, msg }；提示由调用方决定——弹窗里必须用「行内结果条」，
  * 因为 toast 会被 <dialog> 的 top layer 盖住，用户点了什么也看不到。
  */
-async function exportCalendar(daysOverride = null, opts = {}) {
+async function exportCalendar(daysOverride = null) {
   const days = daysOverride || state.days;
-  const inline = opts.inline === true;
-  const say = (text, kind) => {
-    if (inline) setCalStatus(text, kind);
-    else toast(text);
-  };
   if (!days.length) {
-    say(daysOverride ? '这个人这一周还没有排班数据' : '先导入排班表', 'none');
+    toast(daysOverride ? '这个人这一周还没有排班数据' : '先导入排班表');
     return { ok: false, count: 0 };
   }
   const ics = buildIcs(days);
   const count = (ics.match(/BEGIN:VEVENT/g) || []).length;
   if (!count) {
-    say(daysOverride
+    toast(daysOverride
       ? '这一周没有可写入的班次（休息、下夜都不写），日历没有变化'
-      : '这一周没有需要提醒的班次（休息、下夜都不写）', 'none');
+      : '这一周没有需要提醒的班次（休息、下夜都不写）');
     return { ok: false, count: 0 };
   }
   const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
@@ -852,23 +1038,8 @@ async function exportCalendar(daysOverride = null, opts = {}) {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 4000);
-  say(`已生成 ${count} 个班次的日历文件，在“文件”里点它会导入日历`, 'ok');
+  toast(`已生成 ${count} 个班次的日历文件，在“文件”里点它会导入日历`);
   return { ok: true, count };
-}
-
-/** 弹窗里的写入结果条：ok / none / error 三种配色。 */
-function setCalStatus(text, kind) {
-  const el = $('calStatus');
-  if (!el) return;
-  if (!text) {
-    el.hidden = true;
-    el.textContent = '';
-    el.removeAttribute('data-kind');
-    return;
-  }
-  el.hidden = false;
-  el.textContent = text;
-  el.dataset.kind = kind || 'none';
 }
 
 // ---------- 首页「医生日历提醒」开关 ----------
@@ -884,24 +1055,43 @@ function calSwitchOn() {
   return !!key && store.get(K.calOn, '') === key;
 }
 
+/**
+ * 顶部那条日历开关：医生模式和报告员模式共用同一条，位置样子完全一致，
+ * 只是写的是两本不同的日历（医生 / 报告员），互不覆盖。
+ */
 function paintCalSwitch() {
-  const on = calSwitchOn();
+  const reporter = state.kind === 'reporter';
+  const on = reporter ? repCalOn() : calSwitchOn();
+  const label = document.querySelector('.cal-row-label');
+  if (label) label.textContent = reporter ? '报告员日历提醒' : '医生日历提醒';
   const sw = $('calSw');
-  if (sw) sw.setAttribute('aria-checked', on ? 'true' : 'false');
+  if (sw) {
+    sw.setAttribute('aria-checked', on ? 'true' : 'false');
+    sw.setAttribute('aria-label', reporter ? '报告员日历提醒' : '医生日历提醒');
+  }
   const hint = $('calRowHint');
-  if (hint) hint.textContent = on ? leadText(currentLead()) : '开启时选提前多久';
+  if (hint) {
+    hint.textContent = on
+      ? leadText(currentLead())
+      : (reporter && !(state.repDays || []).length ? '先查一下报告员的班' : '开启时选提前多久');
+  }
 }
 
 async function toggleCalSwitch() {
-  if (!state.days.length) {
-    toast('先导入排班表');
+  const reporter = state.kind === 'reporter';
+  const days = reporter ? (state.repDays || []) : state.days;
+  const keyOf = () => (reporter ? repCalKey() : calWeekKey());
+  if (!days.length) {
+    toast(reporter ? '先在顶部查一下报告员的班' : '先导入排班表');
     paintCalSwitch();
     return;
   }
-  if (calSwitchOn()) {
-    store.set(K.calOn, '');
+  if (reporter ? repCalOn() : calSwitchOn()) {
+    store.set(reporter ? K.repCalKey : K.calOn, '');
     paintCalSwitch();
-    toast('已关闭医生日历提醒（已导入日历的事件请在日历里手动删除）');
+    toast(reporter
+      ? '已关闭报告员日历提醒（已导入日历的事件请在日历里手动删除）'
+      : '已关闭医生日历提醒（已导入日历的事件请在日历里手动删除）');
     return;
   }
   // 打开之前先问「提前多久」——用户最在意这个数字，不拿默认值糊过去；
@@ -911,10 +1101,9 @@ async function toggleCalSwitch() {
     paintCalSwitch();
     return;
   }
-  const r = await exportCalendar();
-  store.set(K.calOn, r.ok ? calWeekKey() : '');
+  const r = await exportCalendar(days);
+  store.set(reporter ? K.repCalKey : K.calOn, r.ok ? keyOf() : '');
   paintCalSwitch();
-  if (state.days.length) await renderWeek({ keepName: true });
 }
 
 // ---------- 提前多久提醒（首页 / 报告员弹窗 / 设置共用） ----------
@@ -939,8 +1128,6 @@ function paintLead() {
     b.classList.toggle('on', Number(b.dataset.min) === lead);
   });
   paintCalSwitch();
-  const repRow = $('repCalRow');
-  if (repRow && !repRow.hidden) paintRepCal();
 }
 
 function buildLeadPresets() {
@@ -996,18 +1183,16 @@ async function saveLead(minutes) {
     return;
   }
   toast(lead === 0 ? '已改为：上班那一刻提醒' : `已改为：上班前 ${lead} 分钟提醒`);
-  // 报告员弹窗开着时，提醒时间要重新导出一次才生效，直接在弹窗里说清楚
-  if ($('dlgPerson') && $('dlgPerson').open && (state.reporterShiftDays || []).length) {
-    setCalStatus('提醒时间已改，点「写入日历」重新生成一次才会生效', 'none');
-  }
   // 提醒时间参与班次解析（preTime），改完重算一次首页
-  if (state.days.length) await renderWeek({ keepName: true });
+  if ((state.days || []).length || (state.repDays || []).length) {
+    await renderWeek({ keepName: true });
+  }
 }
 
 // ---------- 报告员弹窗里的日历开关（和首页医生那个同一套逻辑） ----------
 function repCalKey() {
-  const days = (reporterShare && reporterShare.days) || [];
-  const name = (reporterShare && reporterShare.name) || '';
+  const days = state.repDays || [];
+  const name = state.repName || '';
   const first = days.find((d) => d && d.ymd);
   return first && name ? `${name}|${first.ymd}` : '';
 }
@@ -1015,47 +1200,6 @@ function repCalKey() {
 function repCalOn() {
   const key = repCalKey();
   return !!key && store.get(K.repCalKey, '') === key;
-}
-
-function paintRepCal() {
-  const row = $('repCalRow');
-  if (!row) return;
-  const on = repCalOn();
-  row.dataset.on = on ? 'true' : 'false';
-  const sw = $('repCalSw');
-  if (sw) sw.setAttribute('aria-checked', on ? 'true' : 'false');
-  const hint = $('repCalHint');
-  if (hint) hint.textContent = on ? leadText(currentLead()) : '打开时选提前多久';
-}
-
-function setRepCalVisible(v) {
-  const row = $('repCalRow');
-  if (row) row.hidden = !v;
-  if (v) paintRepCal();
-}
-
-async function toggleRepCal() {
-  const days = (reporterShare && reporterShare.days) || [];
-  if (!days.length) {
-    setCalStatus('这个人这一周还没有排班数据', 'none');
-    return;
-  }
-  if (repCalOn()) {
-    // 网页版删不掉已经导入系统日历的事件，只能清标记并说清楚
-    store.set(K.repCalKey, '');
-    paintRepCal();
-    setCalStatus('已关闭日历提醒（已导入到日历的事件请在日历里手动删除）', 'none');
-    return;
-  }
-  // 打开前先问「提前多久」，取消就不导出
-  const lead = await askLead('开启日历提醒前，先定一下提前多久通知你（最长 1 小时）');
-  if (lead === null) {
-    paintRepCal();
-    return;
-  }
-  const r = await exportCalendar(days, { inline: true });
-  store.set(K.repCalKey, r.ok ? repCalKey() : '');
-  paintRepCal();
 }
 
 // ---------- 杂项 UI ----------
@@ -1078,11 +1222,9 @@ function setKind(kind) {
   if (changed) {
     $('nameInput').value = '';
   }
-  // 报告员模式下恢复输入框（可能被“报告员一周”复用）
-  $('personSearch').style.display = '';
-  $('btnShareReporter').style.display = 'none';
-  setRepCalVisible(false);
-  setCalStatus('');
+  // 切模式 = 换一份数据源，界面还是同一个：重新算一遍就完事（v3.30）
+  paintCalSwitch();
+  renderWeek();
 }
 
 // ---------- 整周分享成一张图 ----------
@@ -1446,8 +1588,9 @@ async function shareCanvas(canvas, text, filename) {
 }
 
 async function shareWeekImage() {
+  // 报告员模式下分享的就是首页这一周的报告员班（v3.30）
   if (state.kind === 'reporter') {
-    toast('报告员的排班请先查询，在结果弹窗里点「分享」');
+    await shareReporterImage();
     return;
   }
   if (!state.days.length) {
@@ -1463,11 +1606,12 @@ async function shareWeekImage() {
 }
 
 async function shareReporterImage() {
-  if (!reporterShare || !reporterShare.days.length) {
-    toast('先查一个报告员');
+  const name = state.repName || '';
+  const days = state.repDays || [];
+  if (!days.length) {
+    toast(name ? '这一周还没有排班数据' : '先在顶部查一个报告员');
     return;
   }
-  const { name, days } = reporterShare;
   const range = weekRangeLabel(days);
   const text = (name ? name + ' ' : '') + '本周报告员排班' + (range ? '（' + range + '）' : '');
   const filename = '查班-报告员-' + (range || '本周') + '.png';
@@ -1487,6 +1631,23 @@ async function init() {
   $('weekBar').onclick = openWeekPicker;
   $('weekBarRooms').onclick = openWeekPicker;
   $('btnCloseWeek').onclick = () => $('dlgWeek').close();
+  // 保留多少周由用户自己定：0 = 不限。改小了立刻删掉更早的存档。
+  $('histKeepSel').onchange = (e) => {
+    const n = Number(e.target.value) || 0;
+    store.set(K.histKeep, String(Math.max(0, Math.min(HIST_KEEP_MAX, n))));
+    if (n > 0) {
+      store.setJson(K.hist, trimHistory(histIndex()));
+    }
+    // 正在看的那一周被裁掉了就回本周，别停在空页面上
+    const still = histIndex().some((x) => x.key === (state.weekKey || ''));
+    $('dlgWeek').close();
+    if (state.weekKey && !still) {
+      setWeek('').then(openWeekPicker);
+    } else {
+      openWeekPicker();
+    }
+    toast(n > 0 ? `已改为保留最近 ${n} 周` : '已改为不限数量，以后每周都会留着');
+  };
   for (const goId of ['weekBarGo', 'weekBarRoomsGo']) {
     $(goId).addEventListener('click', (e) => {
       e.stopPropagation();
@@ -1498,12 +1659,19 @@ async function init() {
   $('nameInput').value = '';
   $('leadInput').value = store.get(K.lead, '30');
 
-  $('btnImport').onclick = () => $('filePicker').click();
-  $('btnImportEmpty').onclick = () => $('filePicker').click();
+  $('btnImport').onclick = () => { pendingHistory = false; $('filePicker').click(); };
+  $('btnImportEmpty').onclick = () => { pendingHistory = false; $('filePicker').click(); };
+  // 周弹层里的「手动导入历史表」：只归档到那张表自己那一周，不动当前这份
+  $('btnImportHistory').onclick = () => {
+    pendingHistory = true;
+    $('dlgWeek').close();
+    $('filePicker').click();
+  };
   $('filePicker').onchange = (e) => {
     const f = e.target.files?.[0];
     e.target.value = '';
     if (f) handleFile(f);
+    else pendingHistory = false;
   };
   $('pickDoctor').onclick = () => importAs('doctor');
   $('pickReporter').onclick = () => importAs('reporter');
@@ -1511,11 +1679,9 @@ async function init() {
   $('nameInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') onQuery(); });
   // 注意别把 click 事件当参数传进去（会被当成 days），一定要包一层
   $('btnCalendar').onclick = () => exportCalendar();
-  // 首页「医生日历提醒」：开关样式，只导出首页这一周的医生班次（报告员在结果弹窗里单独导出）
+  // 顶部那条日历开关：医生模式导医生的班，报告员模式导报告员的班
   $('calSw').onclick = toggleCalSwitch;
-  $('repCalSw').onclick = toggleRepCal;
   $('btnShare').onclick = shareWeekImage;
-  $('btnShareReporter').onclick = shareReporterImage;
   document.querySelectorAll('#setThemeSeg button').forEach((b) => {
     b.onclick = () => {
       applyTheme(b.dataset.theme);
@@ -1590,8 +1756,10 @@ async function init() {
     state.weather = {};
     state.weatherAt = 0;
     state.days = [];
+    state.repDays = [];
+    state.repName = '';
+    state.repError = '';
     state.weekKey = '';
-    reporterShare = null;
     paintWeekBar();
     $('nameInput').value = '';
     renderList([]);
@@ -1606,7 +1774,10 @@ async function init() {
 
   // 有缓存就先显示，再后台补天气。
   // 上次停在历史周的话，直接按归档矩阵重算，别拿本周缓存凑数。
-  if (state.weekKey) {
+  if (state.kind === 'reporter') {
+    // 上次停在报告员模式：按存下的报告员重新算，别拿医生缓存凑数
+    await renderWeek();
+  } else if (state.weekKey) {
     if (doctorRowsOf(state.weekKey) && store.get(K.name, '')) {
       await renderWeek();
     }
@@ -1617,13 +1788,7 @@ async function init() {
     await renderWeek();
   }
 
-  $('btnClosePerson').onclick = () => {
-    $('dlgPerson').close();
-    reporterShare = null;
-    $('btnShareReporter').style.display = 'none';
-    setRepCalVisible(false);
-    setCalStatus('');
-  };
+  $('btnClosePerson').onclick = () => $('dlgPerson').close();
   $('btnRooms').onclick = openRooms;
   $('btnCloseRooms').onclick = () => $('dlgRooms').close();
 
@@ -2004,5 +2169,5 @@ function loadCachedWeek() {
 }
 
 self.__APP_VERSION__ = APP_VERSION;
-self.__APP_BUILD__ = '2026-10-26T21:50:43';
+self.__APP_BUILD__ = '2026-10-26T22:28:27';
 document.addEventListener('DOMContentLoaded', init);
