@@ -566,64 +566,62 @@ function decodeRk(rk) {
 }
 
 function fmtDouble(v) {
-    if (Number.isInteger(v) && Math.abs(v) < 9e15) {
-        return BigInt(v).toString();
+    if (!Number.isFinite(v)) {
+        return String(v);
     }
-    return exactBigDecimal(v);
+    if (Number.isInteger(v) && Math.abs(v) < 9e15) {
+        return String(v);
+    }
+    return plainDecimal(v);
 }
 
 /**
- * 复刻 Java: new BigDecimal(double).stripTrailingZeros().toPlainString()
- * 即 double 的精确二进制值对应的十进制表示（不是最短往返表示）。
+ * 把 double 转成不带指数、不丢精度的十进制文本。
+ *
+ * 旧实现用 BigInt 复刻 Java 的 BigDecimal.stripTrailingZeros().toPlainString()，
+ * 但微信小程序（以及 iOS 13 及以下的 Safari）没有可靠的 BigInt：
+ * 一进 .xls 的数值单元格就抛 “Cannot convert a BigInt value to a number”。
+ *
+ * 现在改成纯 number + 字符串搬移。整数、1.5 这类二进制能精确表示的数值，
+ * 输出与原来逐字符相同；只有 0.1 那种无限循环小数不再展开成几十位
+ * （排班表里只有日期序列号和 .5 天数，不受影响）。
  */
-function exactBigDecimal(v) {
-    if (!Number.isFinite(v)) {
-        throw new Error('无法格式化非有限数值: ' + v);
+function plainDecimal(v) {
+    const s = String(v);
+    if (s.indexOf('e') < 0 && s.indexOf('E') < 0) {
+        return s;
     }
+    const m = /^(-?)(\d+)(?:\.(\d+))?[eE]([+-]?\d+)$/.exec(s);
+    if (m == null) {
+        return s;
+    }
+    const sign = m[1] || '';
+    const intPart = m[2];
+    const fracPart = m[3] || '';
+    const exp = parseInt(m[4], 10);
+    const digits = intPart + fracPart;
+    const point = intPart.length + exp;
 
-    const buf = new ArrayBuffer(8);
-    const dv = new DataView(buf);
-    dv.setFloat64(0, v, false);
-    const hi = dv.getUint32(0, false);
-    const lo = dv.getUint32(4, false);
-
-    const negative = (hi >>> 31) !== 0;
-    const exp = (hi >>> 20) & 0x7ff;
-    const frac = (BigInt(hi & 0x000fffff) << 32n) | BigInt(lo);
-
-    let mant;
-    let exp2;
-    if (exp === 0) {
-        mant = frac;
-        exp2 = -1074;
+    let out;
+    if (point <= 0) {
+        out = '0.' + '0'.repeat(-point) + digits;
+    } else if (point >= digits.length) {
+        out = digits + '0'.repeat(point - digits.length);
     } else {
-        mant = (1n << 52n) | frac;
-        exp2 = exp - 1023 - 52;
+        out = digits.slice(0, point) + '.' + digits.slice(point);
     }
-    if (mant === 0n) {
+
+    // stripTrailingZeros().toPlainString()：只裁小数尾巴，整数末尾的 0 不能动
+    if (out.indexOf('.') >= 0) {
+        out = out.replace(/0+$/, '');
+        if (out.endsWith('.')) {
+            out = out.slice(0, -1);
+        }
+    }
+    if (out === '' || out === '0') {
         return '0';
     }
-
-    let text;
-    if (exp2 >= 0) {
-        text = (mant << BigInt(exp2)).toString();
-    } else {
-        const k = -exp2;
-        const scaled = (mant * 5n ** BigInt(k)).toString();
-        if (scaled.length <= k) {
-            text = '0.' + '0'.repeat(k - scaled.length) + scaled;
-        } else {
-            text = scaled.slice(0, scaled.length - k) + '.' + scaled.slice(scaled.length - k);
-        }
-        // stripTrailingZeros().toPlainString()
-        const dot = text.indexOf('.');
-        if (dot >= 0) {
-            const trimmed = text.replace(/0+$/, '');
-            text = trimmed.endsWith('.') ? trimmed.slice(0, -1) : trimmed;
-        }
-    }
-
-    return negative ? '-' + text : text;
+    return sign === '-' ? '-' + out : out;
 }
 
 // ================= 小工具 =================

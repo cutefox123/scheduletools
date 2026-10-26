@@ -367,6 +367,33 @@ export function dayLabelsOf(h) {
 // ---------------- 班次识别（ScheduleParser.fillShift / classify） ----------------
 
 /**
+ * 这张表属于哪一周（首末日 + 日期列数）。
+ *
+ * <p>历史周归档靠它：每次导入的表按首日存一份，医生表和报告员表首日一般相同，
+ * 于是自然落到同一条记录里。与安卓 WeekArchive.span 同一套规则（取日期表头的
+ * 最早/最晚日期），两边算出来的 key 必须一致，否则历史周对不上。</p>
+ *
+ * @returns {{key:string,last:string,days:number}|null} 表头认不出时返回 null
+ */
+export function weekSpanOf(matrix) {
+  if (!matrix || !matrix.length) return null;
+  const h = findHeader(matrix);
+  if (h.error) return null;
+  let first = null;
+  let last = null;
+  let days = 0;
+  for (const dc of h.dateCols) {
+    const d = dc.fullDate != null ? dc.fullDate : safeDate(h.resolvedYear, dc.month, dc.day);
+    if (d == null) continue;
+    const ymd = `${d.y}-${pad2(d.m)}-${pad2(d.d)}`;
+    if (first == null || ymd < first) first = ymd;
+    if (last == null || ymd > last) last = ymd;
+    days++;
+  }
+  return first == null ? null : { key: first, last, days };
+}
+
+/**
  * 班次识别（按本院真实用词）：
  *  - “下”开头且含“夜”：下夜 / 下东夜 / 下西夜 / 下东夜辅 → 下夜班
  *  - 其他含“夜”：产4/夜、男1查/夜、东夜辅 → 夜班
@@ -468,6 +495,54 @@ function midEnd(ward, summer) {
 export function midRange(cell, ymd) {
   const summer = isSummerSeason(ymd);
   return fmtShort(MID_START_MIN) + '-' + fmtShort(midEnd(isWardHalf(cell), summer));
+}
+
+/**
+ * 班次在系统日历里的起止时间（休息 / 下夜班返回 null），逐条对齐 Java 的
+ * `ScheduleParser.spanOf`：
+ *  - 白班：上午有班从上午上班时间开始（病房 8:00 / 门诊 7:30），上午休则从下午
+ *          上班时间开始；下班按下午半天的类型取，下午也休就是中午 12:00 下班；
+ *  - 中班：上午有半天班从上午上班时间开始，否则 12:00 接班；下班取中班结束时间；
+ *  - 夜班：夏令 17:30 / 冬令 17:00 接班，到次日 07:30 交班。
+ *
+ * `start` / `end` 都是「当天 0 点起的分钟数」，`endNextDay` 为 true 表示
+ * `end` 落在第二天（只有夜班会跨天）。
+ *
+ * 小程序写系统日历要的是 unix 秒，转换在 calendar.js 里做；这里只给纯粹的
+ * 时间语义，方便和 Java 侧逐条对拍。
+ */
+export function spanOf(cell, ymd) {
+  const t = stripWs(cell);
+  const type = classify(t);
+  const summer = isSummerSeason(ymd);
+
+  if (type === 'NIGHT') {
+    return {
+      start: summer ? NIGHT_START_MIN : 17 * 60,
+      end: NIGHT_END_MIN,
+      endNextDay: true,
+    };
+  }
+
+  if (type === 'MID') {
+    const pm = splitHalves(t)[1];
+    const start = dayStartOf(t, ymd);
+    // 下午还有半天普通门诊/病房时，中班只是「上午那半天的延长」，按下午下班时间收；
+    // 否则就是纯中班，按中班结束时间收（门诊 13:30 / 病房 14:00，夏令各顺延半小时）。
+    const end = isWorkHalf(pm) && !isMidHalf(pm)
+      ? pmEnd(pm, summer)
+      : midEnd(isWardHalf(t), summer);
+    return { start: start, end: end, endNextDay: false };
+  }
+
+  if (type !== 'DAY') return null;
+
+  const pm = splitHalves(t)[1];
+  return {
+    start: dayStartOf(t, ymd),
+    end: isWorkHalf(pm) ? pmEnd(pm, summer) : 12 * 60,
+    endNextDay: false,
+  };
 }
 
 /**

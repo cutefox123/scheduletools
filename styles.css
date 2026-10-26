@@ -137,6 +137,71 @@ html, body {
   color: #fff;
 }
 
+/* 周切换条：首页顶部（渐变底上，白色描边）与诊室弹窗（浅底）共用一套结构 */
+.week-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  margin: 2px 0 6px;
+  padding: 7px 8px 7px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, .22);
+  background: rgba(255, 255, 255, .12);
+  color: #fff;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.week-bar-text {
+  flex: 0 0 auto;
+}
+
+.week-bar-tag {
+  flex: 0 0 auto;
+  padding: 1px 5px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, .22);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.week-bar-go {
+  margin-left: auto;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.week-bar-caret {
+  flex: 0 0 auto;
+  font-size: 11px;
+  opacity: .6;
+}
+
+.week-bar[data-history="false"] .week-bar-caret {
+  margin-left: auto;
+}
+
+/* 弹窗里的浅底版本 */
+.week-bar-light {
+  margin: 0 0 10px;
+  border-color: var(--border);
+  background: var(--input);
+  color: var(--text);
+}
+
+.week-bar-light .week-bar-tag {
+  background: rgba(75, 107, 245, .12);
+  color: var(--brand);
+}
+
+.week-bar-light .week-bar-go {
+  color: var(--brand);
+}
+
 .cal-row-label {
   flex: 0 0 auto;
   font-size: 13px;

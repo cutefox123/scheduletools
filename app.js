@@ -1,8 +1,8 @@
 // 查班小助手 PWA —— 主逻辑
 // 解析全部在本地完成（js/xlsx.js、js/xls.js、js/parser.js、js/rooms.js），数据只存 localStorage。
 
-import { fetchWeather } from './weather.js?v=2026-10-25T13%3A36%3A50';
-import { buildTips } from './tips.js?v=2026-10-25T13%3A36%3A50';
+import { fetchWeather } from './weather.js?v=2026-10-26T21%3A50%3A43';
+import { buildTips } from './tips.js?v=2026-10-26T21%3A50%3A43';
 
 const K = {
   doctorRows: 'sa.doctorRows',
@@ -18,6 +18,11 @@ const K = {
   theme: 'sa.theme',
   calOn: 'sa.calOn', // 首页「医生日历提醒」开关：记本周（周一日期），换周自动算关闭
   repCalKey: 'sa.repCalKey', // 报告员开关：记「姓名|首日」，换人/换周自动关闭
+  hist: 'sa.hist',       // 历史周索引：[{key,last,doctor,reporter,savedAt}]
+  histD: 'sa.histD.',    // + 首日 → 那一周的医生表 rows
+  histR: 'sa.histR.',    // + 首日 → 那一周的报告员表 rows
+  week: 'sa.week',       // 正在看哪一周（'' = 本周），刷新后保持
+  roomQuery: 'sa.roomQuery', // 诊室查询上次的关键字，退出再进来还留着
 };
 
 const TYPE_STYLE = {
@@ -40,8 +45,8 @@ const TYPE_STYLE_DARK = {
 const $ = (id) => document.getElementById(id);
 
 // 版本跟进：网页版与安卓正式版保持同一个版本号，构建戳只用于判断“网页有没有更新”。
-const APP_VERSION = '3.28';
-const ANDROID_VERSION = '3.28';
+const APP_VERSION = '3.29';
+const ANDROID_VERSION = '3.29';
 // 安卓安装包直链：COS 不允许 .apk 后缀，.bin 就是 APK 本体，Content-Disposition 会还原文件名。
 const ANDROID_APK_URL =
   'https://lovenest-1500804548.cos.ap-guangzhou.myqcloud.com/schedule/scheduleassistant-latest.bin';
@@ -85,6 +90,115 @@ function getReporterResult() {
 }
 
 function invalidateReporter() { repCache = null; }
+
+// ---------- 历史周（v3.29） ----------
+// 每次导入的表按「日期表头算出的首日」归档一份，最多留 8 周。
+// 规则与安卓侧的 WeekArchive / Store.History 一致：医生表和报告员表首日
+// 一般相同，自然落到同一条；差 3 天以内也合并，避免出现两条半空的记录。
+const HIST_KEEP = 8;
+
+/** 这张表属于哪一周（首末日）。规则在 parser.js 里，和安卓 WeekArchive 对齐。 */
+function weekSpanOf(matrix) {
+  if (!mod.parser?.weekSpanOf) return null;
+  try {
+    return mod.parser.weekSpanOf(matrix);
+  } catch {
+    return null;
+  }
+}
+
+/** 周范围文案：10.19-10.25；跨年才带年份。与安卓 WeekArchive.label 一致。 */
+function weekRangeOf(first, last) {
+  if (!first) return '';
+  if (!last || last === first) return mdOf(first);
+  if (first.slice(0, 4) === last.slice(0, 4)) return mdOf(first) + '-' + mdOf(last);
+  const fmt = (ymd) => Number(ymd.slice(0, 4)) + '.' + mdOf(ymd);
+  return fmt(first) + '-' + fmt(last);
+}
+
+function histIndex() {
+  const list = store.json(K.hist, []);
+  return Array.isArray(list) ? list : [];
+}
+
+/** 把刚导入的表归档到它自己那一周（同一周重复导入＝覆盖旧的）。 */
+function archiveWeek(kind, rows) {
+  const span = weekSpanOf(rows);
+  if (!span) return;
+  const list = histIndex();
+  let hit = null;
+  for (const e of list) {
+    if (e.key === span.key) { hit = e; break; }
+    const diff = Math.abs((Date.parse(span.key) - Date.parse(e.key)) / 86400000);
+    if (Number.isFinite(diff) && diff <= 3) { hit = e; break; }
+  }
+  if (!hit) {
+    hit = { key: span.key, last: span.last, doctor: false, reporter: false, savedAt: 0 };
+    list.push(hit);
+  }
+  if (!hit.last || span.last > hit.last) hit.last = span.last;
+  hit.savedAt = Date.now();
+  if (kind === 'reporter') hit.reporter = true; else hit.doctor = true;
+  store.setJson((kind === 'reporter' ? K.histR : K.histD) + hit.key, rows);
+  list.sort((a, b) => b.key.localeCompare(a.key));
+  while (list.length > HIST_KEEP) {
+    const old = list.pop();
+    store.del(K.histD + old.key);
+    store.del(K.histR + old.key);
+  }
+  store.setJson(K.hist, list);
+}
+
+/** 当前这份医生表属于哪一周（列表第一项「本周」用它）。 */
+function currentWeekKey() {
+  const span = weekSpanOf(store.json(K.doctorRows, null));
+  return span ? span.key : '';
+}
+
+/** 可选周列表：第一项永远本周（key=''），后面是归档周，最近的在前。 */
+function historyOptions() {
+  const out = [];
+  const cur = currentWeekKey();
+  if (cur) {
+    const span = weekSpanOf(store.json(K.doctorRows, null));
+    out.push({
+      key: '',
+      label: weekRangeOf(span.key, span.last),
+      current: true,
+      doctor: true,
+      reporter: !!store.json(K.reporterRows, null),
+    });
+  }
+  for (const e of histIndex()) {
+    if (e.key === cur) continue;
+    out.push({
+      key: e.key,
+      label: weekRangeOf(e.key, e.last),
+      current: false,
+      doctor: !!e.doctor,
+      reporter: !!e.reporter,
+    });
+  }
+  return out;
+}
+
+/** 某一周的医生表 rows（'' = 当前这份）。 */
+function doctorRowsOf(weekKey) {
+  return weekKey ? store.json(K.histD + weekKey, null) : store.json(K.doctorRows, null);
+}
+
+/** 某一周的报告员表 rows（'' = 当前这份）。 */
+function reporterRowsOf(weekKey) {
+  return weekKey ? store.json(K.histR + weekKey, null) : store.json(K.reporterRows, null);
+}
+
+/** 周标签文案：本周 / 10.19-10.25。 */
+function weekTitleOf(weekKey) {
+  if (!weekKey) return '本周';
+  const hit = histIndex().find((e) => e.key === weekKey);
+  return hit ? weekRangeOf(hit.key, hit.last) : weekKey;
+}
+
 let state = {
   days: [],
   reporterDays: null,   // 报告员查询结果
@@ -93,6 +207,7 @@ let state = {
   kind: store.get(K.kind, 'doctor'),
   weather: store.json(K.weather, {}),
   weatherAt: Number(store.get(K.weatherAt, '0')),
+  weekKey: store.get(K.week, ''), // '' = 本周；其余是历史周首日 yyyy-MM-dd
 };
 
 // ---------- 工具 ----------
@@ -181,10 +296,10 @@ async function loadModules() {
       return false;
     }
   };
-  await load('xlsx', './xlsx.js?v=2026-10-25T13%3A36%3A50');
-  await load('xls', './xls.js?v=2026-10-25T13%3A36%3A50');
-  await load('parser', './parser.js?v=2026-10-25T13%3A36%3A50');
-  await load('rooms', './rooms.js?v=2026-10-25T13%3A36%3A50');
+  await load('xlsx', './xlsx.js?v=2026-10-26T21%3A50%3A43');
+  await load('xls', './xls.js?v=2026-10-26T21%3A50%3A43');
+  await load('parser', './parser.js?v=2026-10-26T21%3A50%3A43');
+  await load('rooms', './rooms.js?v=2026-10-26T21%3A50%3A43');
   if (!mod.parser) {
     toast('解析模块未就绪，页面仍可打开');
   }
@@ -231,6 +346,10 @@ async function importAs(kind) {
     store.setJson(K.reporterRows, rows);
     store.set(K.reporterFile, fileName);
     invalidateReporter();
+    archiveWeek('reporter', rows);
+    state.weekKey = '';
+    store.set(K.week, '');
+    paintWeekBar();
     toast(`报告员表导入成功：${rep.entries.length} 人`);
     refreshFileStatus();
     await renderWeek({ keepName: true });
@@ -239,6 +358,10 @@ async function importAs(kind) {
 
   store.setJson(K.doctorRows, rows);
   store.set(K.doctorFile, fileName);
+  archiveWeek('doctor', rows);
+  state.weekKey = '';
+  store.set(K.week, '');
+  paintWeekBar();
   refreshFileStatus();
   const names = mod.parser?.doctorNames ? mod.parser.doctorNames(rows) : [];
   const saved = store.get(K.name, '');
@@ -256,7 +379,8 @@ async function importAs(kind) {
 
 // ---------- 渲染一周 ----------
 async function renderWeek({ keepName = false } = {}) {
-  const rows = store.json(K.doctorRows, null);
+  const wk = state.weekKey;
+  const rows = doctorRowsOf(wk);
   const name = store.get(K.name, '');
   if (!rows) { renderList([]); return; }
   if (!name) { renderList([]); return; }
@@ -264,14 +388,20 @@ async function renderWeek({ keepName = false } = {}) {
 
   const res = mod.parser.parseDoctor(rows, name, Number(store.get(K.lead, '30')));
   if (!res.ok) {
+    state.days = [];
     renderList([]);
     if (res.error) toast(res.error);
     return;
   }
   state.days = res.days;
-  store.setJson(K.days, res.days);
+  // 历史周只用来「看」：不写缓存周、不拉天气（那几天早过去了）
+  if (!wk) {
+    store.setJson(K.days, res.days);
+    renderList(res.days);
+    ensureWeather(res.days);
+    return;
+  }
   renderList(res.days);
-  ensureWeather(res.days);
 }
 
 function renderList(days) {
@@ -311,12 +441,70 @@ function renderList(days) {
       <p class="day-raw">${escapeHtml(d.type === 'REST' && (!d.raw || d.raw === '休' || d.raw === '/') ? '休息' : (d.raw || '（单元格为空）'))}</p>
       ${d.workInfo ? `<p class="day-line">${escapeHtml(d.workInfo)}</p>` : ''}
       ${pair ? `<p class="day-line">${escapeHtml(pair)}</p>` : ''}
-      <p class="day-weather">☁️ ${escapeHtml(weatherText || (past ? '已过' : (state.weatherAt ? '暂无预报' : '天气加载中…')))}</p>
+      ${state.weekKey ? '' : `<p class="day-weather">☁️ ${escapeHtml(weatherText || (past ? '已过' : (state.weatherAt ? '暂无预报' : '天气加载中…')))}</p>`}
       ${tips ? `<div class="day-tips">${escapeHtml(tips)}</div>` : ''}
     `;
     attachLongPress(el, () => copyDay(d));
     list.appendChild(el);
   }
+}
+
+// ---------- 周切换条（首页 + 诊室弹窗共用） ----------
+function paintWeekBar() {
+  const wk = state.weekKey || '';
+  const text = wk ? weekTitleOf(wk) : '本周';
+  const bars = [
+    ['weekBarText', 'weekBar', 'weekBarTag', 'weekBarGo'],
+    ['weekBarRoomsText', 'weekBarRooms', 'weekBarRoomsTag', 'weekBarRoomsGo'],
+  ];
+  for (const [textId, barId, tagId, goId] of bars) {
+    const t = $(textId);
+    const bar = $(barId);
+    const tag = $(tagId);
+    const go = $(goId);
+    if (t) t.textContent = text;
+    if (bar) bar.dataset.history = wk ? 'true' : 'false';
+    if (tag) tag.hidden = !wk;
+    if (go) go.hidden = !wk;
+  }
+  // 日历提醒只对本周有意义：翻历史周时先藏起来，免得点了写错周
+  const calRow = document.querySelector('.cal-row');
+  if (calRow) calRow.style.display = wk ? 'none' : '';
+}
+
+function openWeekPicker() {
+  const wrap = $('weekPickList');
+  wrap.innerHTML = '';
+  const list = historyOptions();
+  if (!list.length) {
+    wrap.innerHTML = '<p class="hint" style="padding:8px 2px">还没有排班表——导入一张，这一周就会被记下来。</p>';
+  }
+  for (const w of list) {
+    const b = document.createElement('button');
+    const tags = [w.doctor ? '医生表' : '', w.reporter ? '报告员表' : ''].filter(Boolean).join(' · ');
+    b.innerHTML = (w.key
+      ? escapeHtml(w.label)
+      : '本周<span class="hint" style="margin-left:6px;font-size:11.5px">' + escapeHtml(w.label) + '</span>')
+      + (tags ? `<span class="hint" style="display:block;font-size:11.5px">${escapeHtml(tags)}</span>` : '');
+    if (w.key === (state.weekKey || '')) b.style.color = 'var(--brand)';
+    b.onclick = () => {
+      $('dlgWeek').close();
+      setWeek(w.key);
+    };
+    wrap.appendChild(b);
+  }
+  $('dlgWeek').showModal();
+}
+
+async function setWeek(key) {
+  const next = key || '';
+  if ((state.weekKey || '') === next) return;
+  state.weekKey = next;
+  store.set(K.week, next);
+  paintWeekBar();
+  await renderWeek();
+  // 诊室弹窗开着的话跟着重画，免得还显示上一周
+  if ($('dlgRooms').open) openRooms();
 }
 
 function copyDay(d) {
@@ -459,16 +647,17 @@ async function onQuery() {
 }
 
 async function queryReporter(name) {
-  const rows = store.json(K.reporterRows, null);
-  if (!rows) { toast('还没导入报告员表'); return; }
+  const wk = state.weekKey || '';
+  const rows = reporterRowsOf(wk);
+  if (!rows) { toast(wk ? '这一周没有存档的报告员表' : '还没导入报告员表'); return; }
   if (!mod.parser?.parseReporter) { toast('解析模块未就绪'); return; }
   const rep = mod.parser.parseReporter(rows);
   if (!rep.ok) { toast(rep.error || '报告员表读不出来'); return; }
   const names = mod.parser.reporterNames(rep);
   const hit = names.find((n) => n === name) || names.find((n) => n.includes(name));
   if (!hit) { toast('报告员表里没找到「' + name + '」'); return; }
-  const doctorRows = store.json(K.doctorRows, null);
-  if (!doctorRows) { toast('还没导入医生排班表'); return; }
+  const doctorRows = doctorRowsOf(wk);
+  if (!doctorRows) { toast(wk ? '这一周没有存档的医生表' : '还没导入医生排班表'); return; }
   const res = mod.parser.reporterWeek(doctorRows, rep, hit);
   if (!res.ok) { toast(res.error || '查不到'); return; }
   // 日历班次直接用弹窗上显示的这一周拼（日期和原始格子文本都来自同一处），
@@ -517,24 +706,62 @@ function todayStr() {
 
 function showReporterWeek(name, days) {
   const dlg = $('dlgPerson');
+  const wk = state.weekKey || '';
   reporterShare = { name, days: days || [] };
-  $('personTitle').textContent = name + ' · 本周';
+  $('personTitle').textContent = name + ' · ' + weekTitleOf(wk);
   setCalStatus('');
   $('personSearch').style.display = 'none';
   const hasDays = days && days.length;
-  setRepCalVisible(!!hasDays);
+  // 历史周只看不写日历：日历里现在装的是本周的班，别被旧班表覆盖
+  setRepCalVisible(!!hasDays && !wk);
   $('btnShareReporter').style.display = hasDays ? '' : 'none';
   const listEl = $('personList');
   listEl.innerHTML = '';
-  for (const d of days) {
-    const div = document.createElement('div');
-    div.style.cssText = 'padding:10px 6px;border-bottom:1px solid var(--border)';
-    div.innerHTML = `<b>${escapeHtml(d.weekLabel)}　${escapeHtml(d.dateLabel)}</b><br>`
-      + `<span class="day-line">上午：${escapeHtml(placeText(d.am))}</span><br>`
-      + `<span class="day-line">下午：${escapeHtml(placeText(d.pm))}</span>`;
-    listEl.appendChild(div);
+  const styles = isDarkTheme() ? TYPE_STYLE_DARK : TYPE_STYLE;
+  const today = todayYmd();
+  for (const d of days || []) {
+    // 整格班次 / 时段：和医生卡片同一套 fillShift，版式才完全一致
+    const raw = d.raw || '';
+    const probe = { ymd: d.ymd, raw, type: 'REST', startTime: null, preTime: null, workInfo: '' };
+    try { mod.parser.fillShift(probe, raw, 0); } catch { /* 认不出按休息 */ }
+    const style = styles[probe.type] || styles.REST;
+    const isToday = !wk && d.ymd === today;
+    const partner = reporterPartnerLine(d);
+    const ymd = d.ymd || '';
+    const dateText = ymd.length >= 10
+      ? Number(ymd.slice(5, 7)) + '.' + Number(ymd.slice(8, 10))
+      : (d.dateLabel || '');
+    const weekText = (d.weekLabel || '').replace('星期天', '周日').replace('星期', '周');
+    const section = document.createElement('section');
+    section.className = 'day';
+    if (isToday) section.style.borderColor = 'rgba(75,107,245,.45)';
+    section.innerHTML = `
+      <div class="day-head">
+        <div class="dateblock" style="background:${style.bg};color:${style.fg}">
+          <span class="w">${escapeHtml(weekText)}</span>
+          <span class="d">${escapeHtml(dateText)}</span>
+        </div>
+        <span class="badge" style="background:${style.bg};color:${style.fg}">${style.label}</span>
+      </div>
+      <p class="day-raw">${escapeHtml(raw || '（单元格为空）')}</p>
+      ${probe.workInfo && probe.type !== 'REST' ? `<p class="day-line">${escapeHtml(probe.workInfo)}</p>` : ''}
+      ${partner ? `<p class="day-line">${escapeHtml(partner)}</p>` : ''}
+    `;
+    listEl.appendChild(section);
   }
   dlg.showModal();
+}
+
+/** 报告员搭档：上午下午一样就合成一行，不一样分半天写。 */
+function reporterPartnerLine(d) {
+  const am = (d.am?.partners || []).filter(Boolean);
+  const pm = (d.pm?.partners || []).filter(Boolean);
+  if (!am.length && !pm.length) return '';
+  if (am.join('、') === pm.join('、')) return '搭档：' + am.join('、');
+  const parts = [];
+  if (am.length) parts.push('上午 ' + am.join('、'));
+  if (pm.length) parts.push('下午 ' + pm.join('、'));
+  return '搭档：' + parts.join('　·　');
 }
 
 function placeText(half, withPartners = true) {
@@ -1255,6 +1482,17 @@ async function init() {
   refreshFileStatus();
   setKind(state.kind);
   paintCalSwitch();
+  paintWeekBar();
+  // 周切换（首页 + 诊室弹窗各一条）
+  $('weekBar').onclick = openWeekPicker;
+  $('weekBarRooms').onclick = openWeekPicker;
+  $('btnCloseWeek').onclick = () => $('dlgWeek').close();
+  for (const goId of ['weekBarGo', 'weekBarRoomsGo']) {
+    $(goId).addEventListener('click', (e) => {
+      e.stopPropagation();
+      setWeek('');
+    });
+  }
   // 姓名框默认留空：当前查的人记在 K.name 里（周数据按它渲染），
   // 但不往输入框回填——用户点进来就是要自己输入。
   $('nameInput').value = '';
@@ -1341,12 +1579,20 @@ async function init() {
   $('btnCloseGuide').onclick = () => $('dlgGuide').close();
   $('btnClear').onclick = () => {
     if (!confirm('清空本机的表、姓名和天气缓存？')) return;
+    // 历史周的矩阵是前缀键（sa.histD.<首日>），K 里只有索引，得单独删
+    const hist = histIndex();
     Object.values(K).forEach((k) => store.del(k));
+    for (const e of hist) {
+      store.del(K.histD + e.key);
+      store.del(K.histR + e.key);
+    }
     invalidateReporter();
     state.weather = {};
     state.weatherAt = 0;
     state.days = [];
+    state.weekKey = '';
     reporterShare = null;
+    paintWeekBar();
     $('nameInput').value = '';
     renderList([]);
     refreshFileStatus();
@@ -1358,8 +1604,13 @@ async function init() {
     b.onclick = () => setKind(b.dataset.kind);
   });
 
-  // 有缓存就先显示，再后台补天气
-  if (state.days.length) {
+  // 有缓存就先显示，再后台补天气。
+  // 上次停在历史周的话，直接按归档矩阵重算，别拿本周缓存凑数。
+  if (state.weekKey) {
+    if (doctorRowsOf(state.weekKey) && store.get(K.name, '')) {
+      await renderWeek();
+    }
+  } else if (state.days.length) {
     renderList(state.days);
     ensureWeather(state.days);
   } else if (store.json(K.doctorRows, null) && store.get(K.name, '')) {
@@ -1577,11 +1828,21 @@ const SHIFT_ENTRIES = [
   { token: '东夜辅', note: '东院夜辅' },
 ];
 
+/** 某一周的报告员解析结果（'' = 当前这份），诊室明细按周配对要用。 */
+function reporterResultOf(weekKey) {
+  if (!weekKey) return getReporterResult();
+  const rows = reporterRowsOf(weekKey);
+  if (!rows || !mod.parser?.parseReporter) return null;
+  const r = mod.parser.parseReporter(rows);
+  return r.ok ? r : null;
+}
+
 async function openRooms() {
-  const doctorRows = store.json(K.doctorRows, null);
-  if (!doctorRows) { toast('先导入医生排班表'); return; }
+  const wk = state.weekKey || '';
+  const doctorRows = doctorRowsOf(wk);
+  if (!doctorRows) { toast(wk ? '这一周没有存档的医生表' : '先导入医生排班表'); return; }
   if (!mod.rooms?.buildRooms) { toast('诊室模块未就绪'); return; }
-  const rep = getReporterResult();
+  const rep = reporterResultOf(wk);
   let rooms = [];
   try {
     rooms = mod.rooms.buildRooms(doctorRows, rep);
@@ -1589,8 +1850,9 @@ async function openRooms() {
     toast('诊室读取失败：' + e.message);
     return;
   }
-  // 夜班排在诊室前面：搜「夜」就能看到这四条
+  // 夜班排在诊室**后面**（v3.29 取消置顶）：靠分类文字和图标区分，搜「夜」照样一次筛出来
   const all = [
+    ...rooms.map((r) => ({ ...r, kind: 'room' })),
     ...SHIFT_ENTRIES.map((s) => ({
       kind: 'shift',
       key: 'shift:' + s.token,
@@ -1599,7 +1861,6 @@ async function openRooms() {
       note: s.note,
       forms: [],
     })),
-    ...rooms.map((r) => ({ ...r, kind: 'room' })),
   ];
   const listEl = $('roomList');
   const draw = (q) => {
@@ -1616,8 +1877,8 @@ async function openRooms() {
     for (const r of shown.slice(0, 140)) {
       const b = document.createElement('button');
       if (r.kind === 'shift') {
-        b.innerHTML = `<b>${escapeHtml(r.display)}</b>`
-          + `<span class="hint" style="display:block;font-size:11.5px">${escapeHtml(r.note)} · 点开看本周</span>`;
+        b.innerHTML = `<b>🌙 ${escapeHtml(r.display)}</b>`
+          + `<span class="hint" style="display:block;font-size:11.5px">${escapeHtml(r.note)} · 点开看${escapeHtml(weekTitleOf(wk))}</span>`;
         b.onclick = () => showShiftDetail(doctorRows, r.token, r.note);
       } else {
         const forms = (r.forms || []).filter((f) => f && f !== r.display);
@@ -1628,9 +1889,15 @@ async function openRooms() {
       listEl.appendChild(b);
     }
   };
-  $('roomSearch').value = '';
-  $('roomSearch').oninput = (e) => draw(e.target.value);
-  draw('');
+  // 关键字留在本机（v3.29）：关掉弹窗再打开、切了周都还在
+  const lastQuery = store.get(K.roomQuery, '');
+  $('roomSearch').value = lastQuery;
+  $('roomSearch').oninput = (e) => {
+    store.set(K.roomQuery, e.target.value);
+    draw(e.target.value);
+  };
+  paintWeekBar();
+  draw(lastQuery);
   $('dlgRooms').showModal();
 }
 
@@ -1655,12 +1922,12 @@ function showShiftDetail(doctorRows, token, note) {
   listEl.appendChild(back);
   const title = document.createElement('p');
   title.style.cssText = 'font-weight:700;margin:8px 6px';
-  title.textContent = `${note}（${r.token}） · 本周`;
+  title.textContent = `${note}（${r.token}） · ${weekTitleOf(state.weekKey)}`;
   listEl.appendChild(title);
   for (const d of r.days) {
     const div = document.createElement('div');
     div.style.cssText = 'padding:10px 6px;border-bottom:1px solid var(--border)';
-    const isToday = d.ymd === today;
+    const isToday = !state.weekKey && d.ymd === today;
     div.innerHTML = `<b>${escapeHtml(d.week)}　${escapeHtml(d.date)}</b>`
       + (isToday ? '<span class="night-today-tag" style="margin-left:6px">今晚</span>' : '')
       + `<br><span class="day-line">${d.names.length ? namesHtml(d.names) : '<span class="hint">—</span>'}</span>`;
@@ -1681,7 +1948,7 @@ function showRoomDetail(doctorRows, rep, room) {
   listEl.appendChild(back);
   const title = document.createElement('p');
   title.style.cssText = 'font-weight:700;margin:8px 6px';
-  title.textContent = detail.display + ' · 本周';
+  title.textContent = detail.display + ' · ' + weekTitleOf(state.weekKey);
   listEl.appendChild(title);
   for (const d of detail.days) {
     const div = document.createElement('div');
@@ -1737,5 +2004,5 @@ function loadCachedWeek() {
 }
 
 self.__APP_VERSION__ = APP_VERSION;
-self.__APP_BUILD__ = '2026-10-25T13:36:50';
+self.__APP_BUILD__ = '2026-10-26T21:50:43';
 document.addEventListener('DOMContentLoaded', init);
