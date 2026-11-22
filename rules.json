@@ -1,0 +1,62 @@
+{
+  "schema": 1,
+  "version": "2026.11.22-1",
+  "updated": "2026-11-22T14:00:00+08:00",
+  "notes": "查班小助手默认解析规则（内置）。云端更新时只需改 scheduletools 仓库里的 rules.json。",
+
+  "shift": {
+    "offNight": { "prefix": "下", "contains": "夜" },
+    "night": { "contains": ["夜"] },
+    "mid": { "contains": ["中"], "exclude": ["中医门诊", "中午"] },
+    "rest": {
+      "anyOf": ["假", "公休", "病休", "帮扶", "进修"],
+      "contains": "休"
+    },
+    "workWords": [
+      "查", "诊", "病", "房", "术", "门诊", "床旁", "介入",
+      "行政", "科研", "东", "西", "产", "妇", "乳", "急", "麻醉"
+    ],
+    "separators": ["/", "\\", "|", "-", "—", "~", "．", ".", "、", "，", ",", "。"]
+  },
+
+  "mid": {
+    "trigger": "中",
+    "dutyKey": "值中",
+    "dutyContains": "值",
+    "mainKey": "中",
+    "ignoredChars": ["东", "西", "南", "北", "总", "院", "值", "班"],
+    "districts": [
+      { "key": "东中", "contains": "东" },
+      { "key": "西中", "contains": "西" },
+      { "key": "南中", "contains": "南" },
+      { "key": "北中", "contains": "北" }
+    ],
+    "fallbackToMain": false
+  },
+
+  "room": {
+    "marks": ["听诊", "听", "培训"],
+    "alias": { "听诊": "听" }
+  },
+
+  "ward": {
+    "words": ["病", "二期"],
+    "anyWords": ["介入"],
+    "excludeWith": ["门诊"]
+  },
+
+  "time": {
+    "dayStart": "07:30",
+    "amEnd": "12:00",
+    "pmStartSummer": "14:00",
+    "pmStartWinter": "13:30",
+    "pmEndSummer": "17:30",
+    "pmEndWinter": "17:00",
+    "wardOffsetMinutes": 30,
+    "midStart": "12:00",
+    "nightStartSummer": "17:30",
+    "nightStartWinter": "17:00",
+    "nightHandover": "07:30",
+    "summerMonths": [5, 6, 7, 8, 9]
+  }
+}
